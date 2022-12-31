@@ -545,7 +545,11 @@ impl<'a, K: 'a, V: 'a> NodeRef<marker::Mut<'a>, K, V, marker::Internal> {
 impl<'a, K, V, Type> NodeRef<marker::ValMut<'a>, K, V, Type> {
     /// # Safety
     /// - The node has more than `idx` initialized elements.
-    #[allow(clippy::needless_borrow, clippy::borrow_deref_ref, unstable_name_collisions)]
+    #[allow(
+        clippy::needless_borrow,
+        clippy::borrow_deref_ref,
+        unstable_name_collisions
+    )]
     unsafe fn into_key_val_mut_at(self, idx: usize) -> (&'a K, &'a mut V) {
         // We only create a reference to the one element we are interested in,
         // to avoid aliasing with outstanding references to other elements,

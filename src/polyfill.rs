@@ -1,11 +1,9 @@
 #[macro_use]
 #[allow(unstable_name_collisions)]
 mod definitions {
-
-    use cfg_if::cfg_if;
-
     #[cfg(not(all(feature = "allocator_api", feature = "new_uninit")))]
     use alloc::alloc::Layout;
+    use cfg_if::cfg_if;
     use core::mem::MaybeUninit;
 
     cfg_if! {

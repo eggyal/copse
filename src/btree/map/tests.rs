@@ -1677,32 +1677,14 @@ fn test_clone_panic_leak(size: usize) {
 
         catch_unwind(|| map.clone()).unwrap_err();
         for d in &dummies {
-            assert_eq!(
-                d.cloned(),
-                usize::from(d.id <= i),
-                "id={}/{}",
-                d.id,
-                i
-            );
-            assert_eq!(
-                d.dropped(),
-                usize::from(d.id < i),
-                "id={}/{}",
-                d.id,
-                i
-            );
+            assert_eq!(d.cloned(), usize::from(d.id <= i), "id={}/{}", d.id, i);
+            assert_eq!(d.dropped(), usize::from(d.id < i), "id={}/{}", d.id, i);
         }
         assert_eq!(map.len(), size);
 
         drop(map);
         for d in &dummies {
-            assert_eq!(
-                d.cloned(),
-                usize::from(d.id <= i),
-                "id={}/{}",
-                d.id,
-                i
-            );
+            assert_eq!(d.cloned(), usize::from(d.id <= i), "id={}/{}", d.id, i);
             assert_eq!(
                 d.dropped(),
                 if d.id < i { 2 } else { 1 },
