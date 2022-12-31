@@ -1,6 +1,6 @@
 [package]
 name = "copse"
-version = "0.1.0"
+version = "0.1.1"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/eggyal/copse.git"
 description = "Direct ports of the standard library's B-Tree collections, but that sort according to a specified comparator rather than the `Ord` trait"
