@@ -1,6 +1,8 @@
+use crate::{Sortable, Comparator};
+
 use super::node::{ForceResult::*, Root};
 use super::search::SearchResult::*;
-use core::alloc::Allocator;
+use crate::Allocator;
 use core::borrow::Borrow;
 
 impl<K, V> Root<K, V> {
@@ -29,9 +31,15 @@ impl<K, V> Root<K, V> {
     /// and if the ordering of `Q` corresponds to that of `K`.
     /// If `self` respects all `BTreeMap` tree invariants, then both
     /// `self` and the returned tree will respect those invariants.
-    pub fn split_off<Q: ?Sized + Ord, A: Allocator + Clone>(&mut self, key: &Q, alloc: A) -> Self
+    pub fn split_off<Q: ?Sized, A: Allocator + Clone>(
+        &mut self,
+        key: &Q,
+        comparator: &impl Comparator<K::State>,
+        alloc: A,
+    ) -> Self
     where
-        K: Borrow<Q>,
+        K: Sortable,
+        Q: Borrow<K::State>,
     {
         let left_root = self;
         let mut right_root = Root::new_pillar(left_root.height(), alloc.clone());
@@ -39,7 +47,7 @@ impl<K, V> Root<K, V> {
         let mut right_node = right_root.borrow_mut();
 
         loop {
-            let mut split_edge = match left_node.search_node(key) {
+            let mut split_edge = match left_node.search_node(key.borrow(), comparator) {
                 // key is going to the right tree
                 Found(kv) => kv.left_edge(),
                 GoDown(edge) => edge,

@@ -1,8 +1,8 @@
 use super::super::navigate;
 use super::*;
-use crate::alloc::Global;
-use crate::fmt::Debug;
-use crate::string::String;
+use crate::Global;
+use alloc::fmt::Debug;
+use alloc::string::String;
 
 impl<'a, K: 'a, V: 'a> NodeRef<marker::Immut<'a>, K, V, marker::LeafOrInternal> {
     // Asserts that the back pointer in each reachable node points to its parent.

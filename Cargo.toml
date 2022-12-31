@@ -3,6 +3,51 @@ name = "copse"
 version = "0.1.0"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/eggyal/copse.git"
+description = "Direct ports of the standard library's B-Tree collections, but that sort according to a specified comparator rather than the `Ord` trait"
 edition = "2021"
+keywords = ["b-tree", "collections", "map", "set", "runtime"]
+categories = ["data-structures", "no-std"]
+
+[features]
+unstable = [
+    "allocator_api",
+    "bound_map",
+    "core_intrinsics",
+    "dropck_eyepatch",
+    "error_in_core",
+    "exact_size_is_empty",
+    "exclusive_range_pattern",
+    "extend_one",
+    "hasher_prefixfree_extras",
+    "map_try_insert",
+    "maybe_uninit_slice",
+    "new_uninit",
+    "rustc_attrs",
+    "slice_ptr_get",
+    "specialization",
+    "type_alias_impl_trait",
+]
+allocator_api = []
+bound_map = []
+core_intrinsics = []
+dropck_eyepatch = []
+error_in_core = []
+exact_size_is_empty = []
+exclusive_range_pattern = []
+extend_one = []
+hasher_prefixfree_extras = []
+map_try_insert = []
+maybe_uninit_slice = []
+new_uninit = []
+rustc_attrs = []
+slice_ptr_get = []
+specialization = []
+type_alias_impl_trait = []
+std = []
 
 [dependencies]
+cfg-if = "1.0.0"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

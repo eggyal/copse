@@ -11,6 +11,12 @@ pub enum Cyclic3 {
 }
 use Cyclic3::*;
 
+use crate::Sortable;
+
+impl Sortable for Cyclic3 {
+    type State = Self;
+}
+
 impl PartialOrd for Cyclic3 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
@@ -29,7 +35,7 @@ impl Ord for Cyclic3 {
 
 impl PartialEq for Cyclic3 {
     fn eq(&self, other: &Self) -> bool {
-        self.cmp(&other) == Equal
+        self.cmp(other) == Equal
     }
 }
 
@@ -58,6 +64,10 @@ impl Governor {
 // that total order.
 #[derive(Debug)]
 pub struct Governed<'a, T>(pub T, pub &'a Governor);
+
+impl<T> Sortable for Governed<'_, T> {
+    type State = Self;
+}
 
 impl<T: Ord> PartialOrd for Governed<'_, T> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {

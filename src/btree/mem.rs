@@ -1,6 +1,9 @@
+#[cfg(feature = "core_intrinsics")]
 use core::intrinsics;
 use core::mem;
 use core::ptr;
+
+use cfg_if::cfg_if;
 
 /// This replaces the value behind the `v` unique reference by calling the
 /// relevant function.
@@ -21,7 +24,15 @@ pub fn replace<T, R>(v: &mut T, change: impl FnOnce(T) -> (T, R)) -> R {
     struct PanicGuard;
     impl Drop for PanicGuard {
         fn drop(&mut self) {
-            intrinsics::abort()
+            cfg_if! {
+                if #[cfg(feature = "core_intrinsics")] {
+                    intrinsics::abort()
+                } else if #[cfg(feature = "std")] {
+                    std::process::abort()
+                } else {
+                    panic!()
+                }
+            }
         }
     }
     let guard = PanicGuard;

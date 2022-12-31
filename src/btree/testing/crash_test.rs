@@ -1,7 +1,9 @@
 // We avoid relying on anything else in the crate, apart from the `Debug` trait.
-use crate::fmt::Debug;
+use alloc::fmt::Debug;
 use std::cmp::Ordering;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+
+use crate::Sortable;
 
 /// A blueprint for crash test dummy instances that monitor particular events.
 /// Some instances may be configured to panic at some point.
@@ -57,6 +59,10 @@ impl CrashTestDummy {
 pub struct Instance<'a> {
     origin: &'a CrashTestDummy,
     panic: Panic,
+}
+
+impl Sortable for Instance<'_> {
+    type State = Self;
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

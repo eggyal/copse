@@ -15,6 +15,7 @@ pub trait IsSetVal {
 }
 
 // Blanket implementation
+#[cfg(feature = "specialization")]
 impl<V> IsSetVal for V {
     default fn is_set_val() -> bool {
         false

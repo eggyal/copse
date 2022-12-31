@@ -3,7 +3,7 @@ use super::DormantMutRef;
 #[test]
 fn test_borrow() {
     let mut data = 1;
-    let mut stack = vec![];
+    let mut stack = alloc::vec![];
     let mut rr = &mut data;
     for factor in [2, 3, 7].iter() {
         let (r, dormant_r) = DormantMutRef::new(rr);
