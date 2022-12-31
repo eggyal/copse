@@ -79,7 +79,9 @@ impl<K, V> Root<K, V> {
     pub fn fix_right_border<A: Allocator + Clone>(&mut self, alloc: A) {
         self.fix_top(alloc.clone());
         if self.len() > 0 {
-            self.borrow_mut().last_kv().fix_right_border_of_right_edge(alloc.clone());
+            self.borrow_mut()
+                .last_kv()
+                .fix_right_border_of_right_edge(alloc.clone());
             self.fix_top(alloc);
         }
     }
@@ -88,7 +90,9 @@ impl<K, V> Root<K, V> {
     pub fn fix_left_border<A: Allocator + Clone>(&mut self, alloc: A) {
         self.fix_top(alloc.clone());
         if self.len() > 0 {
-            self.borrow_mut().first_kv().fix_left_border_of_left_edge(alloc.clone());
+            self.borrow_mut()
+                .first_kv()
+                .fix_left_border_of_left_edge(alloc.clone());
             self.fix_top(alloc);
         }
     }

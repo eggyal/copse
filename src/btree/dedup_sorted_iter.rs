@@ -18,7 +18,9 @@ where
     I: Iterator<Item = (K, V)>,
 {
     pub fn new(iter: I) -> Self {
-        Self { iter: iter.peekable() }
+        Self {
+            iter: iter.peekable(),
+        }
     }
 }
 

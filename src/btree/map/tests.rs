@@ -116,14 +116,21 @@ impl<K, V> BTreeMap<K, V> {
     {
         let iter = mem::take(self).into_iter();
         if !iter.is_empty() {
-            self.root.insert(Root::new(*self.alloc)).bulk_push(iter, &mut self.length, *self.alloc);
+            self.root
+                .insert(Root::new(*self.alloc))
+                .bulk_push(iter, &mut self.length, *self.alloc);
         }
     }
 }
 
 impl<'a, K: 'a, V: 'a> NodeRef<marker::Immut<'a>, K, V, marker::LeafOrInternal> {
     fn assert_min_len(self, min_len: usize) {
-        assert!(self.len() >= min_len, "node len {} < {}", self.len(), min_len);
+        assert!(
+            self.len() >= min_len,
+            "node len {} < {}",
+            self.len(),
+            min_len
+        );
         if let node::ForceResult::Internal(node) = self.force() {
             for idx in 0..=node.len() {
                 let edge = unsafe { Handle::new_edge(node, idx) };
@@ -195,7 +202,11 @@ fn test_check_invariants_ord_chaos() {
 fn test_basic_large() {
     let mut map = BTreeMap::new();
     // Miri is too slow
-    let size = if cfg!(miri) { MIN_INSERTS_HEIGHT_2 } else { 10000 };
+    let size = if cfg!(miri) {
+        MIN_INSERTS_HEIGHT_2
+    } else {
+        10000
+    };
     let size = size + (size % 2); // round up to even number
     assert_eq!(map.len(), 0);
 
@@ -205,7 +216,10 @@ fn test_basic_large() {
     }
 
     assert_eq!(map.first_key_value(), Some((&0, &0)));
-    assert_eq!(map.last_key_value(), Some((&(size - 1), &(10 * (size - 1)))));
+    assert_eq!(
+        map.last_key_value(),
+        Some((&(size - 1), &(10 * (size - 1))))
+    );
     assert_eq!(map.first_entry().unwrap().key(), &0);
     assert_eq!(map.last_entry().unwrap().key(), &(size - 1));
 
@@ -609,19 +623,34 @@ fn test_range_small() {
     assert_eq!(range_keys(&map, (Included(1), Included(1))), first);
     assert_eq!(range_keys(&map, (Unbounded, Excluded(2))), first);
     assert_eq!(range_keys(&map, (Unbounded, Included(1))), first);
-    assert_eq!(range_keys(&map, (Excluded(size - 1), Excluded(size + 1))), last);
-    assert_eq!(range_keys(&map, (Excluded(size - 1), Included(size + 1))), last);
+    assert_eq!(
+        range_keys(&map, (Excluded(size - 1), Excluded(size + 1))),
+        last
+    );
+    assert_eq!(
+        range_keys(&map, (Excluded(size - 1), Included(size + 1))),
+        last
+    );
     assert_eq!(range_keys(&map, (Excluded(size - 1), Included(size))), last);
     assert_eq!(range_keys(&map, (Excluded(size - 1), Unbounded)), last);
     assert_eq!(range_keys(&map, (Included(size), Excluded(size + 1))), last);
     assert_eq!(range_keys(&map, (Included(size), Included(size + 1))), last);
     assert_eq!(range_keys(&map, (Included(size), Included(size))), last);
     assert_eq!(range_keys(&map, (Included(size), Unbounded)), last);
-    assert_eq!(range_keys(&map, (Excluded(size), Excluded(size + 1))), vec![]);
+    assert_eq!(
+        range_keys(&map, (Excluded(size), Excluded(size + 1))),
+        vec![]
+    );
     assert_eq!(range_keys(&map, (Excluded(size), Included(size))), vec![]);
     assert_eq!(range_keys(&map, (Excluded(size), Unbounded)), vec![]);
-    assert_eq!(range_keys(&map, (Included(size + 1), Excluded(size + 1))), vec![]);
-    assert_eq!(range_keys(&map, (Included(size + 1), Included(size + 1))), vec![]);
+    assert_eq!(
+        range_keys(&map, (Included(size + 1), Excluded(size + 1))),
+        vec![]
+    );
+    assert_eq!(
+        range_keys(&map, (Included(size + 1), Included(size + 1))),
+        vec![]
+    );
     assert_eq!(range_keys(&map, (Included(size + 1), Unbounded)), vec![]);
 
     assert_eq!(range_keys(&map, ..3), vec![1, 2]);
@@ -636,15 +665,39 @@ fn test_range_height_1() {
     let map = BTreeMap::from_iter((0..MIN_INSERTS_HEIGHT_1 as i32).map(|i| (i, i)));
     let middle = MIN_INSERTS_HEIGHT_1 as i32 / 2;
     for root in middle - 2..=middle + 2 {
-        assert_eq!(range_keys(&map, (Excluded(root), Excluded(root + 1))), vec![]);
-        assert_eq!(range_keys(&map, (Excluded(root), Included(root + 1))), vec![root + 1]);
-        assert_eq!(range_keys(&map, (Included(root), Excluded(root + 1))), vec![root]);
-        assert_eq!(range_keys(&map, (Included(root), Included(root + 1))), vec![root, root + 1]);
+        assert_eq!(
+            range_keys(&map, (Excluded(root), Excluded(root + 1))),
+            vec![]
+        );
+        assert_eq!(
+            range_keys(&map, (Excluded(root), Included(root + 1))),
+            vec![root + 1]
+        );
+        assert_eq!(
+            range_keys(&map, (Included(root), Excluded(root + 1))),
+            vec![root]
+        );
+        assert_eq!(
+            range_keys(&map, (Included(root), Included(root + 1))),
+            vec![root, root + 1]
+        );
 
-        assert_eq!(range_keys(&map, (Excluded(root - 1), Excluded(root))), vec![]);
-        assert_eq!(range_keys(&map, (Included(root - 1), Excluded(root))), vec![root - 1]);
-        assert_eq!(range_keys(&map, (Excluded(root - 1), Included(root))), vec![root]);
-        assert_eq!(range_keys(&map, (Included(root - 1), Included(root))), vec![root - 1, root]);
+        assert_eq!(
+            range_keys(&map, (Excluded(root - 1), Excluded(root))),
+            vec![]
+        );
+        assert_eq!(
+            range_keys(&map, (Included(root - 1), Excluded(root))),
+            vec![root - 1]
+        );
+        assert_eq!(
+            range_keys(&map, (Excluded(root - 1), Included(root))),
+            vec![root]
+        );
+        assert_eq!(
+            range_keys(&map, (Included(root - 1), Included(root))),
+            vec![root - 1, root]
+        );
     }
 }
 
@@ -687,19 +740,34 @@ fn test_range_large() {
     assert_eq!(range_keys(&map, (Included(1), Included(1))), first);
     assert_eq!(range_keys(&map, (Unbounded, Excluded(2))), first);
     assert_eq!(range_keys(&map, (Unbounded, Included(1))), first);
-    assert_eq!(range_keys(&map, (Excluded(size - 1), Excluded(size + 1))), last);
-    assert_eq!(range_keys(&map, (Excluded(size - 1), Included(size + 1))), last);
+    assert_eq!(
+        range_keys(&map, (Excluded(size - 1), Excluded(size + 1))),
+        last
+    );
+    assert_eq!(
+        range_keys(&map, (Excluded(size - 1), Included(size + 1))),
+        last
+    );
     assert_eq!(range_keys(&map, (Excluded(size - 1), Included(size))), last);
     assert_eq!(range_keys(&map, (Excluded(size - 1), Unbounded)), last);
     assert_eq!(range_keys(&map, (Included(size), Excluded(size + 1))), last);
     assert_eq!(range_keys(&map, (Included(size), Included(size + 1))), last);
     assert_eq!(range_keys(&map, (Included(size), Included(size))), last);
     assert_eq!(range_keys(&map, (Included(size), Unbounded)), last);
-    assert_eq!(range_keys(&map, (Excluded(size), Excluded(size + 1))), vec![]);
+    assert_eq!(
+        range_keys(&map, (Excluded(size), Excluded(size + 1))),
+        vec![]
+    );
     assert_eq!(range_keys(&map, (Excluded(size), Included(size))), vec![]);
     assert_eq!(range_keys(&map, (Excluded(size), Unbounded)), vec![]);
-    assert_eq!(range_keys(&map, (Included(size + 1), Excluded(size + 1))), vec![]);
-    assert_eq!(range_keys(&map, (Included(size + 1), Included(size + 1))), vec![]);
+    assert_eq!(
+        range_keys(&map, (Included(size + 1), Excluded(size + 1))),
+        vec![]
+    );
+    assert_eq!(
+        range_keys(&map, (Included(size + 1), Included(size + 1))),
+        vec![]
+    );
     assert_eq!(range_keys(&map, (Included(size + 1), Unbounded)), vec![]);
 
     fn check<'a, L, R>(lhs: L, rhs: R)
@@ -711,7 +779,10 @@ fn test_range_large() {
     }
 
     check(map.range(..=100), map.range(..101));
-    check(map.range(5..=8), vec![(&5, &5), (&6, &6), (&7, &7), (&8, &8)]);
+    check(
+        map.range(5..=8),
+        vec![(&5, &5), (&6, &6), (&7, &7), (&8, &8)],
+    );
     check(map.range(-1..=2), vec![(&1, &1), (&2, &2)]);
 }
 
@@ -791,7 +862,11 @@ fn test_range_finding_ill_order_in_range_ord() {
     impl Ord for EvilTwin {
         fn cmp(&self, other: &Self) -> Ordering {
             let ord = self.0.cmp(&other.0);
-            if COMPARES.fetch_add(1, SeqCst) > 0 { ord.reverse() } else { ord }
+            if COMPARES.fetch_add(1, SeqCst) > 0 {
+                ord.reverse()
+            } else {
+                ord
+            }
         }
     }
 
@@ -819,7 +894,11 @@ fn test_range_finding_ill_order_in_range_ord() {
 #[test]
 fn test_range_1000() {
     // Miri is too slow
-    let size = if cfg!(miri) { MIN_INSERTS_HEIGHT_2 as u32 } else { 1000 };
+    let size = if cfg!(miri) {
+        MIN_INSERTS_HEIGHT_2 as u32
+    } else {
+        1000
+    };
     let map = BTreeMap::from_iter((0..size).map(|i| (i, i)));
 
     fn test(map: &BTreeMap<u32, u32>, size: u32, min: Bound<&u32>, max: Bound<&u32>) {
@@ -863,7 +942,9 @@ fn test_range() {
 
     for i in (0..size).step_by(step) {
         for j in (i..size).step_by(step) {
-            let mut kvs = map.range((Included(&i), Included(&j))).map(|(&k, &v)| (k, v));
+            let mut kvs = map
+                .range((Included(&i), Included(&j)))
+                .map(|(&k, &v)| (k, v));
             let mut pairs = (i..=j).map(|i| (i, i));
 
             for (kv, pair) in kvs.by_ref().zip(pairs.by_ref()) {
@@ -884,7 +965,9 @@ fn test_range_mut() {
 
     for i in (0..size).step_by(step) {
         for j in (i..size).step_by(step) {
-            let mut kvs = map.range_mut((Included(&i), Included(&j))).map(|(&k, &mut v)| (k, v));
+            let mut kvs = map
+                .range_mut((Included(&i), Included(&j)))
+                .map(|(&k, &mut v)| (k, v));
             let mut pairs = (i..=j).map(|i| (i, i));
 
             for (kv, pair) in kvs.by_ref().zip(pairs.by_ref()) {
@@ -976,13 +1059,12 @@ mod test_drain_filter {
     fn mutating_and_keeping() {
         let pairs = (0..3).map(|i| (i, i));
         let mut map = BTreeMap::from_iter(pairs);
-        assert!(
-            map.drain_filter(|_, v| {
+        assert!(map
+            .drain_filter(|_, v| {
                 *v += 6;
                 false
             })
-            .eq(iter::empty())
-        );
+            .eq(iter::empty()));
         assert!(map.keys().copied().eq(0..3));
         assert!(map.values().copied().eq(6..9));
         map.check();
@@ -993,13 +1075,12 @@ mod test_drain_filter {
     fn mutating_and_removing() {
         let pairs = (0..3).map(|i| (i, i));
         let mut map = BTreeMap::from_iter(pairs);
-        assert!(
-            map.drain_filter(|_, v| {
+        assert!(map
+            .drain_filter(|_, v| {
                 *v += 6;
                 true
             })
-            .eq((0..3).map(|i| (i, i + 6)))
-        );
+            .eq((0..3).map(|i| (i, i + 6))));
         assert!(map.is_empty());
         map.check();
     }
@@ -1184,8 +1265,10 @@ mod test_drain_filter {
         map.insert(b.spawn(Panic::InQuery), ());
         map.insert(c.spawn(Panic::InQuery), ());
 
-        catch_unwind(AssertUnwindSafe(|| drop(map.drain_filter(|dummy, _| dummy.query(true)))))
-            .unwrap_err();
+        catch_unwind(AssertUnwindSafe(|| {
+            drop(map.drain_filter(|dummy, _| dummy.query(true)))
+        }))
+        .unwrap_err();
 
         assert_eq!(a.queried(), 1);
         assert_eq!(b.queried(), 1);
@@ -1437,7 +1520,12 @@ fn test_bad_zst() {
 #[test]
 fn test_clear() {
     let mut map = BTreeMap::new();
-    for &len in &[MIN_INSERTS_HEIGHT_1, MIN_INSERTS_HEIGHT_2, 0, node::CAPACITY] {
+    for &len in &[
+        MIN_INSERTS_HEIGHT_1,
+        MIN_INSERTS_HEIGHT_2,
+        0,
+        node::CAPACITY,
+    ] {
         for i in 0..len {
             map.insert(i, ());
         }
@@ -1520,21 +1608,49 @@ fn test_clone_panic_leak(size: usize) {
     for i in 0..size {
         let dummies = Vec::from_iter((0..size).map(|id| CrashTestDummy::new(id)));
         let map = BTreeMap::from_iter(dummies.iter().map(|dummy| {
-            let panic = if dummy.id == i { Panic::InClone } else { Panic::Never };
+            let panic = if dummy.id == i {
+                Panic::InClone
+            } else {
+                Panic::Never
+            };
             (dummy.spawn(panic), ())
         }));
 
         catch_unwind(|| map.clone()).unwrap_err();
         for d in &dummies {
-            assert_eq!(d.cloned(), if d.id <= i { 1 } else { 0 }, "id={}/{}", d.id, i);
-            assert_eq!(d.dropped(), if d.id < i { 1 } else { 0 }, "id={}/{}", d.id, i);
+            assert_eq!(
+                d.cloned(),
+                if d.id <= i { 1 } else { 0 },
+                "id={}/{}",
+                d.id,
+                i
+            );
+            assert_eq!(
+                d.dropped(),
+                if d.id < i { 1 } else { 0 },
+                "id={}/{}",
+                d.id,
+                i
+            );
         }
         assert_eq!(map.len(), size);
 
         drop(map);
         for d in &dummies {
-            assert_eq!(d.cloned(), if d.id <= i { 1 } else { 0 }, "id={}/{}", d.id, i);
-            assert_eq!(d.dropped(), if d.id < i { 2 } else { 1 }, "id={}/{}", d.id, i);
+            assert_eq!(
+                d.cloned(),
+                if d.id <= i { 1 } else { 0 },
+                "id={}/{}",
+                d.id,
+                i
+            );
+            assert_eq!(
+                d.dropped(),
+                if d.id < i { 2 } else { 1 },
+                "id={}/{}",
+                d.id,
+                i
+            );
         }
     }
 }
@@ -2019,7 +2135,10 @@ fn test_insert_into_full_height_1() {
         map.compact();
         let root_node = map.root.as_ref().unwrap().reborrow();
         assert_eq!(root_node.len(), 1);
-        assert_eq!(root_node.first_leaf_edge().into_node().len(), node::CAPACITY);
+        assert_eq!(
+            root_node.first_leaf_edge().into_node().len(),
+            node::CAPACITY
+        );
         assert_eq!(root_node.last_leaf_edge().into_node().len(), node::CAPACITY);
 
         assert!(map.insert(pos * 2, ()).is_none());
@@ -2225,7 +2344,11 @@ fn test_split_off_halfway() {
 #[test]
 fn test_split_off_large_random_sorted() {
     // Miri is too slow
-    let mut data = if cfg!(miri) { rand_data(529) } else { rand_data(1529) };
+    let mut data = if cfg!(miri) {
+        rand_data(529)
+    } else {
+        rand_data(1529)
+    };
     // special case with maximum height.
     data.sort();
 
@@ -2235,8 +2358,12 @@ fn test_split_off_large_random_sorted() {
     map.check();
     right.check();
 
-    assert!(map.into_iter().eq(data.clone().into_iter().filter(|x| x.0 < key)));
-    assert!(right.into_iter().eq(data.into_iter().filter(|x| x.0 >= key)));
+    assert!(map
+        .into_iter()
+        .eq(data.clone().into_iter().filter(|x| x.0 < key)));
+    assert!(right
+        .into_iter()
+        .eq(data.into_iter().filter(|x| x.0 >= key)));
 }
 
 #[test]
@@ -2268,7 +2395,11 @@ fn test_into_iter_drop_leak_height_1() {
     for panic_point in vec![0, 1, size - 2, size - 1] {
         let dummies = Vec::from_iter((0..size).map(|i| CrashTestDummy::new(i)));
         let map = BTreeMap::from_iter((0..size).map(|i| {
-            let panic = if i == panic_point { Panic::InDrop } else { Panic::Never };
+            let panic = if i == panic_point {
+                Panic::InDrop
+            } else {
+                Panic::Never
+            };
             (dummies[i].spawn(Panic::Never), dummies[i].spawn(panic))
         }));
         catch_unwind(move || drop(map.into_iter())).unwrap_err();

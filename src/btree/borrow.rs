@@ -28,7 +28,13 @@ impl<'a, T> DormantMutRef<'a, T> {
         // SAFETY: we hold the borrow throughout 'a via `_marker`, and we expose
         // only this reference, so it is unique.
         let new_ref = unsafe { &mut *ptr.as_ptr() };
-        (new_ref, Self { ptr, _marker: PhantomData })
+        (
+            new_ref,
+            Self {
+                ptr,
+                _marker: PhantomData,
+            },
+        )
     }
 
     /// Revert to the unique borrow initially captured.

@@ -9,7 +9,13 @@ pub struct DeterministicRng {
 
 impl DeterministicRng {
     pub fn new() -> Self {
-        DeterministicRng { count: 0, x: 0x193a6754, y: 0xa8a7d469, z: 0x97830e05, w: 0x113ba7bb }
+        DeterministicRng {
+            count: 0,
+            x: 0x193a6754,
+            y: 0xa8a7d469,
+            z: 0x97830e05,
+            w: 0x113ba7bb,
+        }
     }
 
     /// Guarantees that each returned number is unique.

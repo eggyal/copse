@@ -14,13 +14,19 @@ pub struct LeafRange<BorrowType, K, V> {
 
 impl<'a, K: 'a, V: 'a> Clone for LeafRange<marker::Immut<'a>, K, V> {
     fn clone(&self) -> Self {
-        LeafRange { front: self.front.clone(), back: self.back.clone() }
+        LeafRange {
+            front: self.front.clone(),
+            back: self.back.clone(),
+        }
     }
 }
 
 impl<BorrowType, K, V> LeafRange<BorrowType, K, V> {
     pub fn none() -> Self {
-        LeafRange { front: None, back: None }
+        LeafRange {
+            front: None,
+            back: None,
+        }
     }
 
     fn is_empty(&self) -> bool {
@@ -125,13 +131,19 @@ pub struct LazyLeafRange<BorrowType, K, V> {
 
 impl<'a, K: 'a, V: 'a> Clone for LazyLeafRange<marker::Immut<'a>, K, V> {
     fn clone(&self) -> Self {
-        LazyLeafRange { front: self.front.clone(), back: self.back.clone() }
+        LazyLeafRange {
+            front: self.front.clone(),
+            back: self.back.clone(),
+        }
     }
 }
 
 impl<BorrowType, K, V> LazyLeafRange<BorrowType, K, V> {
     pub fn none() -> Self {
-        LazyLeafRange { front: None, back: None }
+        LazyLeafRange {
+            front: None,
+            back: None,
+        }
     }
 
     /// Temporarily takes out another, immutable equivalent of the same range.
@@ -210,7 +222,9 @@ impl<BorrowType: marker::BorrowType, K, V> LazyLeafRange<BorrowType, K, V> {
         &mut self,
     ) -> Option<&mut Handle<NodeRef<BorrowType, K, V, marker::Leaf>, marker::Edge>> {
         if let Some(LazyLeafHandle::Root(root)) = &self.front {
-            self.front = Some(LazyLeafHandle::Edge(unsafe { ptr::read(root) }.first_leaf_edge()));
+            self.front = Some(LazyLeafHandle::Edge(
+                unsafe { ptr::read(root) }.first_leaf_edge(),
+            ));
         }
         match &mut self.front {
             None => None,
@@ -224,7 +238,9 @@ impl<BorrowType: marker::BorrowType, K, V> LazyLeafRange<BorrowType, K, V> {
         &mut self,
     ) -> Option<&mut Handle<NodeRef<BorrowType, K, V, marker::Leaf>, marker::Edge>> {
         if let Some(LazyLeafHandle::Root(root)) = &self.back {
-            self.back = Some(LazyLeafHandle::Edge(unsafe { ptr::read(root) }.last_leaf_edge()));
+            self.back = Some(LazyLeafHandle::Edge(
+                unsafe { ptr::read(root) }.last_leaf_edge(),
+            ));
         }
         match &mut self.back {
             None => None,
@@ -271,7 +287,12 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
                 let mut upper_edge = unsafe { Handle::new_edge(node, upper_edge_idx) };
                 loop {
                     match (lower_edge.force(), upper_edge.force()) {
-                        (Leaf(f), Leaf(b)) => return LeafRange { front: Some(f), back: Some(b) },
+                        (Leaf(f), Leaf(b)) => {
+                            return LeafRange {
+                                front: Some(f),
+                                back: Some(b),
+                            }
+                        }
                         (Internal(f), Internal(b)) => {
                             (lower_edge, lower_child_bound) =
                                 f.descend().find_lower_bound_edge(lower_child_bound);
@@ -447,8 +468,10 @@ impl<K, V> Handle<NodeRef<marker::Dying, K, V, marker::Leaf>, marker::Edge> {
     unsafe fn deallocating_next<A: Allocator + Clone>(
         self,
         alloc: A,
-    ) -> Option<(Self, Handle<NodeRef<marker::Dying, K, V, marker::LeafOrInternal>, marker::KV>)>
-    {
+    ) -> Option<(
+        Self,
+        Handle<NodeRef<marker::Dying, K, V, marker::LeafOrInternal>, marker::KV>,
+    )> {
         let mut edge = self.forget_node_type();
         loop {
             edge = match edge.right_kv() {
@@ -479,8 +502,10 @@ impl<K, V> Handle<NodeRef<marker::Dying, K, V, marker::Leaf>, marker::Edge> {
     unsafe fn deallocating_next_back<A: Allocator + Clone>(
         self,
         alloc: A,
-    ) -> Option<(Self, Handle<NodeRef<marker::Dying, K, V, marker::LeafOrInternal>, marker::KV>)>
-    {
+    ) -> Option<(
+        Self,
+        Handle<NodeRef<marker::Dying, K, V, marker::LeafOrInternal>, marker::KV>,
+    )> {
         let mut edge = self.forget_node_type();
         loop {
             edge = match edge.left_kv() {
