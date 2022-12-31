@@ -1,13 +1,13 @@
+use core::borrow::Borrow;
 use core::hint;
 use core::ops::RangeBounds;
 use core::ptr;
-use core::borrow::Borrow;
 
-use crate::{Sortable, Comparator};
+use crate::{Comparator, Sortable};
 
 use super::node::{marker, ForceResult::*, Handle, NodeRef};
 
-use crate::Allocator;
+use crate::polyfill::*;
 // `front` and `back` are always both `None` or both `Some`.
 pub struct LeafRange<BorrowType, K, V> {
     front: Option<Handle<NodeRef<BorrowType, K, V, marker::Leaf>, marker::Edge>>,
@@ -296,10 +296,12 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
                             }
                         }
                         (Internal(f), Internal(b)) => {
-                            (lower_edge, lower_child_bound) =
-                                f.descend().find_lower_bound_edge(comparator, lower_child_bound);
-                            (upper_edge, upper_child_bound) =
-                                b.descend().find_upper_bound_edge(comparator, upper_child_bound);
+                            (lower_edge, lower_child_bound) = f
+                                .descend()
+                                .find_lower_bound_edge(comparator, lower_child_bound);
+                            (upper_edge, upper_child_bound) = b
+                                .descend()
+                                .find_upper_bound_edge(comparator, upper_child_bound);
                         }
                         _ => unreachable!("BTreeMap has different depths"),
                     }

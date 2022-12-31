@@ -1,6 +1,6 @@
 use super::map::MIN_LEN;
 use super::node::{marker, ForceResult::*, Handle, LeftOrRight::*, NodeRef, Root};
-use crate::Allocator;
+use crate::polyfill::*;
 
 impl<'a, K: 'a, V: 'a> NodeRef<marker::Mut<'a>, K, V, marker::LeafOrInternal> {
     /// Stocks up a possibly underfull node by merging with or stealing from a

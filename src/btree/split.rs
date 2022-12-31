@@ -1,8 +1,8 @@
-use crate::{Sortable, Comparator};
+use crate::{Comparator, Sortable};
 
 use super::node::{ForceResult::*, Root};
 use super::search::SearchResult::*;
-use crate::Allocator;
+use crate::polyfill::*;
 use core::borrow::Borrow;
 
 impl<K, V> Root<K, V> {

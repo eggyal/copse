@@ -59,7 +59,7 @@ where
             assert_eq!(self.length, root_node.calc_length());
 
             // Lastly, check the invariant causing the least harm.
-            root_node.assert_min_len(if root_node.height() > 0 { 1 } else { 0 });
+            root_node.assert_min_len(usize::from(root_node.height() > 0));
         } else {
             assert_eq!(self.length, 0);
         }
@@ -1679,14 +1679,14 @@ fn test_clone_panic_leak(size: usize) {
         for d in &dummies {
             assert_eq!(
                 d.cloned(),
-                if d.id <= i { 1 } else { 0 },
+                usize::from(d.id <= i),
                 "id={}/{}",
                 d.id,
                 i
             );
             assert_eq!(
                 d.dropped(),
-                if d.id < i { 1 } else { 0 },
+                usize::from(d.id < i),
                 "id={}/{}",
                 d.id,
                 i
@@ -1698,7 +1698,7 @@ fn test_clone_panic_leak(size: usize) {
         for d in &dummies {
             assert_eq!(
                 d.cloned(),
-                if d.id <= i { 1 } else { 0 },
+                usize::from(d.id <= i),
                 "id={}/{}",
                 d.id,
                 i

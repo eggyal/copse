@@ -36,10 +36,9 @@ use core::mem::{self, MaybeUninit};
 use core::ptr::{self, NonNull};
 use core::slice::SliceIndex;
 
-use crate::Allocator;
+use crate::polyfill::*;
 use alloc::alloc::Layout;
 use alloc::boxed::Box;
-use cfg_if::cfg_if;
 
 const B: usize = 6;
 pub const CAPACITY: usize = 2 * B - 1;
@@ -79,54 +78,13 @@ impl<K, V> LeafNode<K, V> {
         }
     }
 
-    cfg_if! {
-        if #[cfg(feature = "allocator_api")] {
-            /// Creates a new boxed `LeafNode`.
-            fn new<A: Allocator + Clone>(alloc: A) -> Box<Self, A> {
-                cfg_if! {
-                    if #[cfg(feature = "new_uninit")] {
-                        unsafe {
-                            let mut leaf = Box::new_uninit_in(alloc);
-                            LeafNode::init(leaf.as_mut_ptr());
-                            leaf.assume_init()
-                        }
-                    } else {
-                        let layout = Layout::new::<Self>();
-                        match alloc.allocate(layout) {
-                            Ok(ptr) => unsafe {
-                                let leaf = ptr.cast().as_ptr();
-                                LeafNode::init(leaf);
-                                Box::from_raw_in(leaf, alloc)
-                            },
-                            Err(_) => alloc::alloc::handle_alloc_error(layout),
-                        }
-                    }
-                }
-            }
-        } else {
-            /// Creates a new boxed `LeafNode`.
-            fn new<A: Allocator + Clone>(alloc: A) -> Box<Self> {
-                cfg_if! {
-                    if #[cfg(feature = "new_uninit")] {
-                        unsafe {
-                            let _ = alloc;
-                            let mut leaf = Box::new_uninit();
-                            LeafNode::init(leaf.as_mut_ptr());
-                            leaf.assume_init()
-                        }
-                    } else {
-                        let layout = Layout::new::<Self>();
-                        match alloc.allocate(layout) {
-                            Ok(ptr) => unsafe {
-                                let leaf = ptr.cast().as_ptr();
-                                LeafNode::init(leaf);
-                                Box::from_raw(leaf)
-                            },
-                            Err(_) => alloc::alloc::handle_alloc_error(layout),
-                        }
-                    }
-                }
-            }
+    /// Creates a new boxed `LeafNode`.
+    fn new<A: Allocator + Clone>(alloc: A) -> Box!(Self, A) {
+        #[allow(unstable_name_collisions)]
+        unsafe {
+            let mut leaf = Box::new_uninit_in(alloc);
+            LeafNode::init(leaf.as_mut_ptr());
+            leaf.assume_init()
         }
     }
 }
@@ -148,68 +106,19 @@ struct InternalNode<K, V> {
 }
 
 impl<K, V> InternalNode<K, V> {
-    cfg_if! {
-        if #[cfg(feature = "allocator_api")] {
-            /// Creates a new boxed `InternalNode`.
-            ///
-            /// # Safety
-            /// An invariant of internal nodes is that they have at least one
-            /// initialized and valid edge. This function does not set up
-            /// such an edge.
-            unsafe fn new<A: Allocator + Clone>(alloc: A) -> Box<Self, A> {
-                cfg_if! {
-                    if #[cfg(feature = "new_uninit")] {
-                        unsafe {
-                            let mut node = Box::<Self, _>::new_uninit_in(alloc);
-                            // We only need to initialize the data; the edges are MaybeUninit.
-                            LeafNode::init(ptr::addr_of_mut!((*node.as_mut_ptr()).data));
-                            node.assume_init()
-                        }
-                    } else {
-                        let layout = Layout::new::<Self>();
-                        match alloc.allocate(layout) {
-                            Ok(ptr) => unsafe {
-                                let node = ptr.cast::<Self>().as_ptr();
-                                // We only need to initialize the data; the edges are MaybeUninit.
-                                LeafNode::init(ptr::addr_of_mut!((*node).data));
-                                Box::from_raw_in(node, alloc)
-                            },
-                            Err(_) => alloc::alloc::handle_alloc_error(layout),
-                        }
-                    }
-                }
-            }
-        } else {
-            /// Creates a new boxed `InternalNode`.
-            ///
-            /// # Safety
-            /// An invariant of internal nodes is that they have at least one
-            /// initialized and valid edge. This function does not set up
-            /// such an edge.
-            unsafe fn new<A: Allocator + Clone>(alloc: A) -> Box<Self> {
-                cfg_if! {
-                    if #[cfg(feature = "new_uninit")] {
-                        unsafe {
-                            let _ = alloc;
-                            let mut node = Box::<Self>::new_uninit();
-                            // We only need to initialize the data; the edges are MaybeUninit.
-                            LeafNode::init(ptr::addr_of_mut!((*node.as_mut_ptr()).data));
-                            node.assume_init()
-                        }
-                    } else {
-                        let layout = Layout::new::<Self>();
-                        match alloc.allocate(layout) {
-                            Ok(ptr) => unsafe {
-                                let node = ptr.cast::<Self>().as_ptr();
-                                // We only need to initialize the data; the edges are MaybeUninit.
-                                LeafNode::init(ptr::addr_of_mut!((*node).data));
-                                Box::from_raw(node)
-                            },
-                            Err(_) => alloc::alloc::handle_alloc_error(layout),
-                        }
-                    }
-                }
-            }
+    /// Creates a new boxed `InternalNode`.
+    ///
+    /// # Safety
+    /// An invariant of internal nodes is that they have at least one
+    /// initialized and valid edge. This function does not set up
+    /// such an edge.
+    unsafe fn new<A: Allocator + Clone>(alloc: A) -> Box!(Self, A) {
+        #[allow(unstable_name_collisions)]
+        unsafe {
+            let mut node = <Box!(Self, _)>::new_uninit_in(alloc);
+            // We only need to initialize the data; the edges are MaybeUninit.
+            LeafNode::init(ptr::addr_of_mut!((*node.as_mut_ptr()).data));
+            node.assume_init()
         }
     }
 }
@@ -311,23 +220,11 @@ impl<K, V> NodeRef<marker::Owned, K, V, marker::Leaf> {
         Self::from_new_leaf::<A>(LeafNode::new(alloc))
     }
 
-    cfg_if! {
-        if #[cfg(feature = "allocator_api")] {
-            fn from_new_leaf<A: Allocator + Clone>(leaf: Box<LeafNode<K, V>, A>) -> Self {
-                NodeRef {
-                    height: 0,
-                    node: NonNull::from(Box::leak(leaf)),
-                    _marker: PhantomData,
-                }
-            }
-        } else {
-            fn from_new_leaf<A: Allocator + Clone>(leaf: Box<LeafNode<K, V>>) -> Self {
-                NodeRef {
-                    height: 0,
-                    node: NonNull::from(Box::leak(leaf)),
-                    _marker: PhantomData,
-                }
-            }
+    fn from_new_leaf<A: Allocator + Clone>(leaf: Box!(LeafNode<K, V>, A)) -> Self {
+        NodeRef {
+            height: 0,
+            node: NonNull::from(Box::leak(leaf)),
+            _marker: PhantomData,
         }
     }
 }
@@ -339,42 +236,21 @@ impl<K, V> NodeRef<marker::Owned, K, V, marker::Internal> {
         unsafe { NodeRef::from_new_internal::<A>(new_node, child.height + 1) }
     }
 
-    cfg_if! {
-        if #[cfg(feature = "allocator_api")] {
-            /// # Safety
-            /// `height` must not be zero.
-            unsafe fn from_new_internal<A: Allocator + Clone>(
-                internal: Box<InternalNode<K, V>, A>,
-                height: usize,
-            ) -> Self {
-                debug_assert!(height > 0);
-                let node = NonNull::from(Box::leak(internal)).cast();
-                let mut this = NodeRef {
-                    height,
-                    node,
-                    _marker: PhantomData,
-                };
-                this.borrow_mut().correct_all_childrens_parent_links();
-                this
-            }
-        } else {
-            /// # Safety
-            /// `height` must not be zero.
-            unsafe fn from_new_internal<A: Allocator + Clone>(
-                internal: Box<InternalNode<K, V>>,
-                height: usize,
-            ) -> Self {
-                debug_assert!(height > 0);
-                let node = NonNull::from(Box::leak(internal)).cast();
-                let mut this = NodeRef {
-                    height,
-                    node,
-                    _marker: PhantomData,
-                };
-                this.borrow_mut().correct_all_childrens_parent_links();
-                this
-            }
-        }
+    /// # Safety
+    /// `height` must not be zero.
+    unsafe fn from_new_internal<A: Allocator + Clone>(
+        internal: Box!(InternalNode<K, V>, A),
+        height: usize,
+    ) -> Self {
+        debug_assert!(height > 0);
+        let node = NonNull::from(Box::leak(internal)).cast();
+        let mut this = NodeRef {
+            height,
+            node,
+            _marker: PhantomData,
+        };
+        this.borrow_mut().correct_all_childrens_parent_links();
+        this
     }
 }
 
@@ -531,13 +407,8 @@ impl<'a, K: 'a, V: 'a, Type> NodeRef<marker::Immut<'a>, K, V, Type> {
         unsafe {
             let slice = leaf.keys.get_unchecked(..usize::from(leaf.len));
 
-            cfg_if! {
-                if #[cfg(feature = "maybe_uninit_slice")] {
-                    MaybeUninit::slice_assume_init_ref(slice)
-                } else {
-                    &*(slice as *const [MaybeUninit<K>] as *const [K])
-                }
-            }
+            #[allow(unstable_name_collisions)]
+            MaybeUninit::slice_assume_init_ref(slice)
         }
     }
 }
@@ -674,6 +545,7 @@ impl<'a, K: 'a, V: 'a> NodeRef<marker::Mut<'a>, K, V, marker::Internal> {
 impl<'a, K, V, Type> NodeRef<marker::ValMut<'a>, K, V, Type> {
     /// # Safety
     /// - The node has more than `idx` initialized elements.
+    #[allow(clippy::needless_borrow, clippy::borrow_deref_ref, unstable_name_collisions)]
     unsafe fn into_key_val_mut_at(self, idx: usize) -> (&'a K, &'a mut V) {
         // We only create a reference to the one element we are interested in,
         // to avoid aliasing with outstanding references to other elements,
@@ -685,20 +557,7 @@ impl<'a, K, V, Type> NodeRef<marker::ValMut<'a>, K, V, Type> {
         let keys: *const [_] = keys;
         let vals: *mut [_] = vals;
 
-        #[cfg(not(feature = "slice_ptr_get"))]
-        let (keys, vals) = unsafe {
-            let (keys, vals) = (&*keys, &mut *vals);
-            debug_assert!(idx < keys.len());
-            debug_assert!(idx < vals.len());
-            (keys, vals)
-        };
-
-        #[cfg_attr(
-            not(feature = "slice_ptr_get"),
-            allow(clippy::needless_borrow, clippy::borrow_deref_ref)
-        )]
         let key = unsafe { (&*keys.get_unchecked(idx)).assume_init_ref() };
-        #[cfg_attr(not(feature = "slice_ptr_get"), allow(clippy::needless_borrow))]
         let val = unsafe { (&mut *vals.get_unchecked_mut(idx)).assume_init_mut() };
 
         (key, val)

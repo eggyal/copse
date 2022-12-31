@@ -1,6 +1,6 @@
 use core::iter::Peekable;
 
-use crate::{Sortable, Comparator};
+use crate::{Comparator, Sortable};
 
 /// A iterator for deduping the key of a sorted iterator.
 /// When encountering the duplicated key, only the last key-value pair is yielded.
@@ -48,7 +48,11 @@ where
                 None => return Some(next),
             };
 
-            if self.comparator.cmp(next.0.borrow(), peeked.0.borrow()).is_ne() {
+            if self
+                .comparator
+                .cmp(next.0.borrow(), peeked.0.borrow())
+                .is_ne()
+            {
                 return Some(next);
             }
         }

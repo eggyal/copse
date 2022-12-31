@@ -2,7 +2,7 @@ use core::borrow::Borrow;
 use core::cmp::Ordering;
 use core::ops::{Bound, RangeBounds};
 
-use crate::{Sortable, Comparator};
+use crate::{Comparator, Sortable};
 
 use super::node::{marker, ForceResult::*, Handle, NodeRef};
 
@@ -110,7 +110,9 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
         // remain the same, but an adversarial implementation could change between calls (#81138).
         let (start, end) = (range.start_bound(), range.end_bound());
         match (start, end) {
-            (Bound::Excluded(s), Bound::Excluded(e)) if comparator.cmp(s.borrow(), e.borrow()).is_eq() => {
+            (Bound::Excluded(s), Bound::Excluded(e))
+                if comparator.cmp(s.borrow(), e.borrow()).is_eq() =>
+            {
                 cfg_if! {
                     if #[cfg(feature = "specialization")] {
                         if is_set {
@@ -143,7 +145,8 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
         let mut lower_bound = SearchBound::from_range(start);
         let mut upper_bound = SearchBound::from_range(end);
         loop {
-            let (lower_edge_idx, lower_child_bound) = self.find_lower_bound_index(comparator, lower_bound);
+            let (lower_edge_idx, lower_child_bound) =
+                self.find_lower_bound_index(comparator, lower_bound);
             let (upper_edge_idx, upper_child_bound) =
                 unsafe { self.find_upper_bound_index(comparator, upper_bound, lower_edge_idx) };
             if lower_edge_idx < upper_edge_idx {

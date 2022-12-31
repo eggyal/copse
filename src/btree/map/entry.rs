@@ -2,7 +2,7 @@ use core::fmt::{self, Debug};
 use core::marker::PhantomData;
 use core::mem;
 
-use crate::{Allocator, Global};
+use crate::polyfill::*;
 
 use super::super::borrow::DormantMutRef;
 use super::super::node::{marker, Handle, NodeRef};

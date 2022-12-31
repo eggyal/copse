@@ -10,7 +10,7 @@ use core::mem::{self, ManuallyDrop};
 use core::ops::{Index, RangeBounds};
 use core::ptr;
 
-use crate::{Allocator, Global, Comparator};
+use crate::{polyfill::*, Comparator};
 
 use super::borrow::DormantMutRef;
 use super::dedup_sorted_iter::DedupSortedIter;
@@ -18,7 +18,7 @@ use super::navigate::{LazyLeafRange, LeafRange};
 use super::node::{self, marker, ForceResult::*, Handle, NodeRef, Root};
 use super::search::SearchResult::*;
 use super::set_val::SetValZST;
-use crate::{Sortable, MinCmpFn, StdOrd};
+use crate::{std_ord::Ord as _, MinCmpFn, Sortable};
 
 mod entry;
 
@@ -274,7 +274,8 @@ impl<K: Clone, V: Clone, C: Clone, A: Allocator + Clone> Clone for BTreeMap<K, V
 
                             let k = (*k).clone();
                             let v = (*v).clone();
-                            let subtree = clone_subtree(in_edge.descend(), comparator, alloc.clone());
+                            let subtree =
+                                clone_subtree(in_edge.descend(), comparator, alloc.clone());
 
                             // We can't destructure subtree directly
                             // because BTreeMap implements Drop
@@ -651,7 +652,10 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// assert!(a.is_empty());
     /// ```
     // #[stable(feature = "rust1", since = "1.0.0")]
-    pub fn clear(&mut self) where C: Clone {
+    pub fn clear(&mut self)
+    where
+        C: Clone,
+    {
         // avoid moving the allocator
         mem::drop(BTreeMap {
             root: mem::replace(&mut self.root, None),
@@ -662,6 +666,7 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
         });
     }
 
+    // Only expose the `new_in` method (and its doctest) if the relevant feature is enabled.
     cfg_if! {
         if #[cfg(feature = "allocator_api")] {
             /// Makes a new empty BTreeMap with a reasonable choice for B, ordered by the given `comparator`.
@@ -672,7 +677,7 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
             ///
             /// ```
             /// #![feature(allocator_api)]
-            /// 
+            ///
             /// use copse::BTreeMap;
             /// use std::alloc::Global;
             ///
@@ -693,6 +698,7 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
                 }
             }
         } else {
+            // Implementation is identical to that above.
             pub(crate) fn new_in(comparator: C, alloc: A) -> Self {
                 BTreeMap {
                     root: None,
@@ -1192,10 +1198,16 @@ where
             return;
         }
 
-        let self_iter =
-            mem::replace(self, Self::new_in(self.comparator.clone(), (*self.alloc).clone())).into_iter();
-        let other_iter =
-            mem::replace(other, Self::new_in(self.comparator.clone(), (*self.alloc).clone())).into_iter();
+        let self_iter = mem::replace(
+            self,
+            Self::new_in(self.comparator.clone(), (*self.alloc).clone()),
+        )
+        .into_iter();
+        let other_iter = mem::replace(
+            other,
+            Self::new_in(self.comparator.clone(), (*self.alloc).clone()),
+        )
+        .into_iter();
         let root = self
             .root
             .get_or_insert_with(|| Root::new((*self.alloc).clone()));
@@ -1472,7 +1484,11 @@ where
     }
 
     /// Makes a `BTreeMap` from a sorted iterator.
-    pub(crate) fn bulk_build_from_sorted_iter<I>(iter: I, comparator: C, alloc: A) -> BTreeMap<K, V, C, A>
+    pub(crate) fn bulk_build_from_sorted_iter<I>(
+        iter: I,
+        comparator: C,
+        alloc: A,
+    ) -> BTreeMap<K, V, C, A>
     where
         I: IntoIterator<Item = (K, V)>,
     {
@@ -2256,13 +2272,8 @@ where
 // #[stable(feature = "rust1", since = "1.0.0")]
 impl<K: Hash, V: Hash, C, A: Allocator + Clone> Hash for BTreeMap<K, V, C, A> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        cfg_if! {
-            if #[cfg(feature = "hasher_prefixfree_extras")] {
-                state.write_length_prefix(self.len());
-            } else {
-                state.write_usize(self.len());
-            }
-        }
+        #[allow(unstable_name_collisions)]
+        state.write_length_prefix(self.len());
 
         for elt in self {
             elt.hash(state);
@@ -2356,7 +2367,7 @@ where
         }
 
         // use stable sort to preserve the insertion order.
-        arr.sort_by(|a, b| Ord::cmp(a.0.borrow(),b.0.borrow()));
+        arr.sort_by(|a, b| Ord::cmp(a.0.borrow(), b.0.borrow()));
         BTreeMap::bulk_build_from_sorted_iter(arr, K::State::cmp_fn(), Global)
     }
 }

@@ -11,14 +11,14 @@ use core::iter::{FromIterator, FusedIterator, Peekable};
 use core::mem::ManuallyDrop;
 use core::ops::{BitAnd, BitOr, BitXor, RangeBounds, Sub};
 
-use crate::{Sortable, MinCmpFn, StdOrd, Comparator};
+use crate::{std_ord::Ord as _, Comparator, MinCmpFn, Sortable};
 
 use super::map::{BTreeMap, Keys};
 use super::merge_iter::MergeIterInner;
 use super::set_val::SetValZST;
 use super::Recover;
 
-use crate::{Allocator, Global};
+use crate::polyfill::*;
 
 // FIXME(conventions): implement bounded iterators
 
@@ -28,7 +28,7 @@ use crate::{Allocator, Global};
 /// benefits and drawbacks.
 ///
 /// It is a logic error for an item to be modified in such a way that the item's ordering relative
-/// to any other item, as determined by the [`Ord`] trait, changes while it is in the set. This is
+/// to any other item, as determined by the [`Comparator`], changes while it is in the set. This is
 /// normally only possible through [`Cell`], [`RefCell`], global state, I/O, or unsafe code.
 /// The behavior resulting from such a logic error is not specified, but will be encapsulated to the
 /// `BTreeSet` that observed the logic error and not result in undefined behavior. This could
@@ -37,7 +37,6 @@ use crate::{Allocator, Global};
 /// Iterators returned by [`BTreeSet::iter`] produce their items in order, and take worst-case
 /// logarithmic and amortized constant time per item returned.
 ///
-/// [`Ord`]: core::cmp::Ord
 /// [`Cell`]: core::cell::Cell
 /// [`RefCell`]: core::cell::RefCell
 ///
@@ -398,15 +397,15 @@ where
     C: Comparator<T::State>,
 {
     /// Makes a new `BTreeSet` with a reasonable choice of B ordered by the given `comparator`.
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```
     /// #![feature(allocator_api)]
-    /// 
+    ///
     /// use copse::BTreeSet;
     /// use std::alloc::Global;
-    /// 
+    ///
     /// let mut set: BTreeSet<i32> = BTreeSet::new_in(Ord::cmp, Global);
     /// ```
     // #[unstable(feature = "btreemap_alloc", issue = "32838")]
@@ -497,8 +496,12 @@ where
             };
         Difference {
             inner: match (
-                self.map.comparator.cmp(self_min.borrow(), other_max.borrow()),
-                self.map.comparator.cmp(self_max.borrow(), other_min.borrow()),
+                self.map
+                    .comparator
+                    .cmp(self_min.borrow(), other_max.borrow()),
+                self.map
+                    .comparator
+                    .cmp(self_max.borrow(), other_min.borrow()),
             ) {
                 (Greater, _) | (_, Less) => DifferenceInner::Iterate(self.iter()),
                 (Equal, _) => {
@@ -551,7 +554,10 @@ where
         &'a self,
         other: &'a BTreeSet<T, C, A>,
     ) -> SymmetricDifference<'a, T, C> {
-        SymmetricDifference(MergeIterInner::new(self.iter(), other.iter()), &self.map.comparator)
+        SymmetricDifference(
+            MergeIterInner::new(self.iter(), other.iter()),
+            &self.map.comparator,
+        )
     }
 
     /// Visits the elements representing the intersection,
@@ -596,8 +602,12 @@ where
             };
         Intersection {
             inner: match (
-                self.map.comparator.cmp(self_min.borrow(), other_max.borrow()),
-                self.map.comparator.cmp(self_max.borrow(), other_min.borrow()),
+                self.map
+                    .comparator
+                    .cmp(self_min.borrow(), other_max.borrow()),
+                self.map
+                    .comparator
+                    .cmp(self_max.borrow(), other_min.borrow()),
             ) {
                 (Greater, _) | (_, Less) => IntersectionInner::Answer(None),
                 (Equal, _) => IntersectionInner::Answer(Some(self_min)),
@@ -643,7 +653,10 @@ where
     /// ```
     // #[stable(feature = "rust1", since = "1.0.0")]
     pub fn union<'a>(&'a self, other: &'a BTreeSet<T, C, A>) -> Union<'a, T, C> {
-        Union(MergeIterInner::new(self.iter(), other.iter()), &self.map.comparator)
+        Union(
+            MergeIterInner::new(self.iter(), other.iter()),
+            &self.map.comparator,
+        )
     }
 
     /// Returns `true` if the set contains an element equal to the value.
@@ -754,14 +767,22 @@ where
                 return false; // other is empty
             };
         let mut self_iter = self.iter();
-        match self.map.comparator.cmp(self_min.borrow(), other_min.borrow()) {
+        match self
+            .map
+            .comparator
+            .cmp(self_min.borrow(), other_min.borrow())
+        {
             Less => return false,
             Equal => {
                 self_iter.next();
             }
             Greater => (),
         }
-        match self.map.comparator.cmp(self_max.borrow(), other_max.borrow()) {
+        match self
+            .map
+            .comparator
+            .cmp(self_max.borrow(), other_max.borrow())
+        {
             Greater => return false,
             Equal => {
                 self_iter.next_back();
@@ -1272,7 +1293,11 @@ where
     T: Sortable,
     C: Comparator<T::State>,
 {
-    fn from_sorted_iter<I: Iterator<Item = T>>(iter: I, comparator: C, alloc: A) -> BTreeSet<T, C, A> {
+    fn from_sorted_iter<I: Iterator<Item = T>>(
+        iter: I,
+        comparator: C,
+        alloc: A,
+    ) -> BTreeSet<T, C, A> {
         let iter = iter.map(|k| (k, SetValZST::default()));
         let map = BTreeMap::bulk_build_from_sorted_iter(iter, comparator, alloc);
         BTreeSet { map }
@@ -1816,7 +1841,9 @@ where
 
     fn next(&mut self) -> Option<&'a T> {
         loop {
-            let (a_next, b_next) = self.0.nexts(&|a: &&T, b: &&T| self.1.cmp((*a).borrow(), (*b).borrow()));
+            let (a_next, b_next) = self
+                .0
+                .nexts(&|a: &&T, b: &&T| self.1.cmp((*a).borrow(), (*b).borrow()));
             if a_next.and(b_next).is_none() {
                 return a_next.or(b_next);
             }
@@ -1937,7 +1964,9 @@ where
     type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
-        let (a_next, b_next) = self.0.nexts(&|a: &&T, b: &&T| self.1.cmp((*a).borrow(), (*b).borrow()));
+        let (a_next, b_next) = self
+            .0
+            .nexts(&|a: &&T, b: &&T| self.1.cmp((*a).borrow(), (*b).borrow()));
         a_next.or(b_next)
     }
 
