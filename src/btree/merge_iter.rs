@@ -2,8 +2,6 @@ use core::cmp::Ordering;
 use core::fmt::{self, Debug};
 use core::iter::FusedIterator;
 
-use crate::Comparator;
-
 /// Core of an iterator that merges the output of two strictly ascending iterators,
 /// for instance a union or a symmetric difference.
 pub struct MergeIterInner<I: Iterator> {
@@ -63,7 +61,7 @@ impl<I: Iterator> MergeIterInner<I> {
     /// return the same empty pair.
     pub fn nexts(
         &mut self,
-        comparator: &impl Comparator<I::Item>,
+        comparator: impl Fn(&I::Item, &I::Item) -> Ordering,
     ) -> (Option<I::Item>, Option<I::Item>)
     where
         I: FusedIterator,
@@ -85,7 +83,7 @@ impl<I: Iterator> MergeIterInner<I> {
             }
         }
         if let (Some(a1), Some(b1)) = (&a_next, &b_next) {
-            match comparator.cmp(a1, b1) {
+            match comparator(a1, b1) {
                 Ordering::Less => self.peeked = b_next.take().map(Peeked::B),
                 Ordering::Greater => self.peeked = a_next.take().map(Peeked::A),
                 Ordering::Equal => (),

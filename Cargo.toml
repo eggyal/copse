@@ -1,6 +1,6 @@
 [package]
 name = "copse"
-version = "0.1.1"
+version = "0.2.0"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/eggyal/copse.git"
 description = "Direct ports of the standard library's B-Tree collections, but that sort according to a specified comparator rather than the `Ord` trait"
@@ -25,7 +25,6 @@ unstable = [
     "rustc_attrs",
     "slice_ptr_get",
     "specialization",
-    "type_alias_impl_trait",
 ]
 allocator_api = []
 bound_map = []
@@ -42,7 +41,6 @@ new_uninit = []
 rustc_attrs = []
 slice_ptr_get = []
 specialization = []
-type_alias_impl_trait = []
 std = []
 
 [dependencies]

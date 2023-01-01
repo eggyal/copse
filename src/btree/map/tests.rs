@@ -41,10 +41,7 @@ fn test_all_refs<'a, T: 'a>(dummy: &mut T, iter: impl Iterator<Item = &'a mut T>
     }
 }
 
-impl<K: Sortable, V> BTreeMap<K, V>
-where
-    K::State: Ord,
-{
+impl<K: OrdStoredKey, V> BTreeMap<K, V> {
     // Panics if the map (or the code navigating it) is corrupted.
     fn check_invariants(&self) {
         if let Some(root) = &self.root {
@@ -74,7 +71,7 @@ where
     // guarantee that all keys are unique, just that adjacent keys are unique.
     fn check(&self)
     where
-        K::State: Debug,
+        K::DefaultComparisonKey: Debug,
     {
         self.check_invariants();
         self.assert_strictly_ascending();
@@ -99,16 +96,16 @@ where
     // Panics if the keys are not in strictly ascending order.
     fn assert_strictly_ascending(&self)
     where
-        K::State: Debug,
+        K::DefaultComparisonKey: Debug,
     {
         let mut keys = self.keys();
         if let Some(mut previous) = keys.next() {
             for next in keys {
                 assert!(
-                    previous.borrow() < next.borrow(),
+                    self.comparator.cmp(previous.key(), next.key()).is_lt(),
                     "{:?} >= {:?}",
-                    previous.borrow(),
-                    next.borrow()
+                    previous.key(),
+                    next.key()
                 );
                 previous = next;
             }
@@ -118,10 +115,7 @@ where
     // Transform the tree to minimize wasted space, obtaining fewer nodes that
     // are mostly filled up to their capacity. The same compact tree could have
     // been obtained by inserting keys in a shrewd order.
-    fn compact(&mut self)
-    where
-        K: Ord,
-    {
+    fn compact(&mut self) {
         let iter = mem::take(self).into_iter();
 
         cfg_if! {
@@ -412,9 +406,9 @@ fn test_iter_rev() {
 // Specifically tests iter_mut's ability to mutate the value of pairs in-line.
 fn do_test_iter_mut_mutation<T>(size: usize)
 where
-    T: Copy + Sortable + TryFrom<usize>,
+    T: Copy + OrdStoredKey + TryFrom<usize>,
     <T as TryFrom<usize>>::Error: Debug,
-    T::State: Debug + Ord,
+    T::DefaultComparisonKey: Debug,
 {
     let zero = T::try_from(0).unwrap();
     let mut map = BTreeMap::from_iter((0..size).map(|i| (T::try_from(i).unwrap(), zero)));
@@ -425,22 +419,22 @@ where
 
     // Iterate forwards, trying to mutate to unique values
     for (i, (k, v)) in map.iter_mut().enumerate() {
-        assert_eq!(k.borrow(), T::try_from(i).unwrap().borrow());
-        assert_eq!((*v).borrow(), zero.borrow());
+        assert_eq!(k.key(), T::try_from(i).unwrap().key());
+        assert_eq!((*v).key(), zero.key());
         *v = T::try_from(i + 1).unwrap();
     }
 
     // Iterate backwards, checking that mutations succeeded and trying to mutate again
     for (i, (k, v)) in map.iter_mut().rev().enumerate() {
-        assert_eq!(k.borrow(), T::try_from(size - i - 1).unwrap().borrow());
-        assert_eq!((*v).borrow(), T::try_from(size - i).unwrap().borrow());
+        assert_eq!(k.key(), T::try_from(size - i - 1).unwrap().key());
+        assert_eq!((*v).key(), T::try_from(size - i).unwrap().key());
         *v = T::try_from(2 * size - i).unwrap();
     }
 
     // Check that backward mutations succeeded
     for (i, (k, v)) in map.iter_mut().enumerate() {
-        assert_eq!(k.borrow(), T::try_from(i).unwrap().borrow());
-        assert_eq!((*v).borrow(), T::try_from(size + i + 1).unwrap().borrow());
+        assert_eq!(k.key(), T::try_from(i).unwrap().key());
+        assert_eq!((*v).key(), T::try_from(size + i + 1).unwrap().key());
     }
     map.check();
 }
@@ -449,8 +443,8 @@ where
 #[repr(align(32))]
 struct Align32(usize);
 
-impl Sortable for Align32 {
-    type State = Self;
+impl OrdStoredKey for Align32 {
+    type DefaultComparisonKey = Self;
 }
 
 impl TryFrom<usize> for Align32 {
@@ -603,10 +597,7 @@ fn test_iter_min_max() {
     a.check();
 }
 
-fn range_keys(
-    map: &BTreeMap<i32, i32, impl Copy + Fn(&i32, &i32) -> Ordering>,
-    range: impl RangeBounds<i32>,
-) -> Vec<i32> {
+fn range_keys(map: &BTreeMap<i32, i32>, range: impl RangeBounds<i32>) -> Vec<i32> {
     Vec::from_iter(map.range(range).map(|(&k, &v)| {
         assert_eq!(k, v);
         k
@@ -911,14 +902,10 @@ fn test_range_finding_ill_order_in_range_ord() {
     #[derive(PartialEq, Eq, PartialOrd, Ord)]
     struct CompositeKey(i32, EvilTwin);
 
-    impl Borrow<EvilTwin> for CompositeKey {
-        fn borrow(&self) -> &EvilTwin {
+    impl LookupKey<OrdComparator<EvilTwin>> for CompositeKey {
+        fn key(&self) -> &EvilTwin {
             &self.1
         }
-    }
-
-    impl Sortable for CompositeKey {
-        type State = EvilTwin;
     }
 
     let map = BTreeMap::from_iter((0..12).map(|i| (CompositeKey(i, EvilTwin(i)), ())));
@@ -1398,47 +1385,47 @@ fn test_borrow() {
     }
 
     #[allow(dead_code)]
-    fn get<T: Ord>(v: &BTreeMap<Box<T>, ()>, t: &T) {
+    fn get<T: Ord>(v: &BTreeMap<Box<T>, (), OrdComparator<T>>, t: &T) {
         let _ = v.get(t);
     }
 
     #[allow(dead_code)]
-    fn get_mut<T: Ord>(v: &mut BTreeMap<Box<T>, ()>, t: &T) {
+    fn get_mut<T: Ord>(v: &mut BTreeMap<Box<T>, (), OrdComparator<T>>, t: &T) {
         let _ = v.get_mut(t);
     }
 
     #[allow(dead_code)]
-    fn get_key_value<T: Ord>(v: &BTreeMap<Box<T>, ()>, t: &T) {
+    fn get_key_value<T: Ord>(v: &BTreeMap<Box<T>, (), OrdComparator<T>>, t: &T) {
         let _ = v.get_key_value(t);
     }
 
     #[allow(dead_code)]
-    fn contains_key<T: Ord>(v: &BTreeMap<Box<T>, ()>, t: &T) {
+    fn contains_key<T: Ord>(v: &BTreeMap<Box<T>, (), OrdComparator<T>>, t: &T) {
         let _ = v.contains_key(t);
     }
 
     #[allow(dead_code)]
-    fn range<T: Ord>(v: &BTreeMap<Box<T>, ()>, t: T) {
+    fn range<T: Ord>(v: &BTreeMap<Box<T>, (), OrdComparator<T>>, t: T) {
         let _ = v.range(t..);
     }
 
     #[allow(dead_code)]
-    fn range_mut<T: Ord>(v: &mut BTreeMap<Box<T>, ()>, t: T) {
+    fn range_mut<T: Ord>(v: &mut BTreeMap<Box<T>, (), OrdComparator<T>>, t: T) {
         let _ = v.range_mut(t..);
     }
 
     #[allow(dead_code)]
-    fn remove<T: Ord>(v: &mut BTreeMap<Box<T>, ()>, t: &T) {
+    fn remove<T: Ord>(v: &mut BTreeMap<Box<T>, (), OrdComparator<T>>, t: &T) {
         v.remove(t);
     }
 
     #[allow(dead_code)]
-    fn remove_entry<T: Ord>(v: &mut BTreeMap<Box<T>, ()>, t: &T) {
+    fn remove_entry<T: Ord>(v: &mut BTreeMap<Box<T>, (), OrdComparator<T>>, t: &T) {
         v.remove_entry(t);
     }
 
     #[allow(dead_code)]
-    fn split_off<T: Ord>(v: &mut BTreeMap<Box<T>, ()>, t: &T) {
+    fn split_off<T: Ord>(v: &mut BTreeMap<Box<T>, (), OrdComparator<T>>, t: &T) {
         v.split_off(t);
     }
 }
@@ -1544,8 +1531,8 @@ fn test_bad_zst() {
     #[derive(Clone, Copy, Debug)]
     struct Bad;
 
-    impl Sortable for Bad {
-        type State = Self;
+    impl OrdStoredKey for Bad {
+        type DefaultComparisonKey = Self;
     }
 
     impl PartialEq for Bad {
@@ -1733,7 +1720,7 @@ fn test_clone_from() {
 
 #[allow(dead_code)]
 fn assert_covariance() {
-    fn map_key<'new>(v: BTreeMap<&'static str, ()>) -> BTreeMap<&'new str, ()> {
+    fn map_key<'new>(v: BTreeMap<&'static str, (), ()>) -> BTreeMap<&'new str, (), ()> {
         v
     }
     fn map_val<'new>(v: BTreeMap<(), &'static str>) -> BTreeMap<(), &'new str> {
@@ -1792,111 +1779,66 @@ fn assert_covariance() {
 
 #[allow(dead_code)]
 fn assert_sync() {
-    fn map<T: Sortable + Sync>(v: &BTreeMap<T, T>) -> impl Sync + '_
-    where
-        T::State: Ord,
-    {
+    fn map<T: Sync + OrdStoredKey>(v: &BTreeMap<T, T>) -> impl Sync + '_ {
         v
     }
 
-    fn into_iter<T: Sortable + Sync>(v: BTreeMap<T, T>) -> impl Sync
-    where
-        T::State: Ord,
-    {
+    fn into_iter<T: Sync + OrdStoredKey>(v: BTreeMap<T, T>) -> impl Sync {
         v.into_iter()
     }
 
-    fn into_keys<T: Sortable + Sync>(v: BTreeMap<T, T>) -> impl Sync
-    where
-        T::State: Ord,
-    {
+    fn into_keys<T: Sync + OrdStoredKey>(v: BTreeMap<T, T>) -> impl Sync {
         v.into_keys()
     }
 
-    fn into_values<T: Sortable + Sync>(v: BTreeMap<T, T>) -> impl Sync
-    where
-        T::State: Ord,
-    {
+    fn into_values<T: Sync + OrdStoredKey>(v: BTreeMap<T, T>) -> impl Sync {
         v.into_values()
     }
 
-    fn drain_filter<T: Sortable + Sync>(v: &mut BTreeMap<T, T>) -> impl Sync + '_
-    where
-        T::State: Ord,
-    {
+    fn drain_filter<T: Sync + OrdStoredKey>(v: &mut BTreeMap<T, T>) -> impl Sync + '_ {
         v.drain_filter(|_, _| false)
     }
 
-    fn iter<T: Sortable + Sync>(v: &BTreeMap<T, T>) -> impl Sync + '_
-    where
-        T::State: Ord,
-    {
+    fn iter<T: Sync + OrdStoredKey>(v: &BTreeMap<T, T>) -> impl Sync + '_ {
         v.iter()
     }
 
-    fn iter_mut<T: Sortable + Sync>(v: &mut BTreeMap<T, T>) -> impl Sync + '_
-    where
-        T::State: Ord,
-    {
+    fn iter_mut<T: Sync + OrdStoredKey>(v: &mut BTreeMap<T, T>) -> impl Sync + '_ {
         v.iter_mut()
     }
 
-    fn keys<T: Sortable + Sync>(v: &BTreeMap<T, T>) -> impl Sync + '_
-    where
-        T::State: Ord,
-    {
+    fn keys<T: Sync + OrdStoredKey>(v: &BTreeMap<T, T>) -> impl Sync + '_ {
         v.keys()
     }
 
-    fn values<T: Sortable + Sync>(v: &BTreeMap<T, T>) -> impl Sync + '_
-    where
-        T::State: Ord,
-    {
+    fn values<T: Sync + OrdStoredKey>(v: &BTreeMap<T, T>) -> impl Sync + '_ {
         v.values()
     }
 
-    fn values_mut<T: Sortable + Sync>(v: &mut BTreeMap<T, T>) -> impl Sync + '_
-    where
-        T::State: Ord,
-    {
+    fn values_mut<T: Sync + OrdStoredKey>(v: &mut BTreeMap<T, T>) -> impl Sync + '_ {
         v.values_mut()
     }
 
-    fn range<T: Sortable + Sync>(v: &BTreeMap<T, T>) -> impl Sync + '_
-    where
-        T::State: Ord,
-    {
+    fn range<T: Sync + OrdStoredKey>(v: &BTreeMap<T, T>) -> impl Sync + '_ {
         v.range::<T, _>(..)
     }
 
-    fn range_mut<T: Sortable + Sync>(v: &mut BTreeMap<T, T>) -> impl Sync + '_
-    where
-        T::State: Ord,
-    {
+    fn range_mut<T: Sync + OrdStoredKey>(v: &mut BTreeMap<T, T>) -> impl Sync + '_ {
         v.range_mut::<T, _>(..)
     }
 
-    fn entry<T: Sortable + Sync + Default>(v: &mut BTreeMap<T, T>) -> impl Sync + '_
-    where
-        T::State: Ord,
-    {
+    fn entry<T: Sync + OrdStoredKey + Default>(v: &mut BTreeMap<T, T>) -> impl Sync + '_ {
         v.entry(Default::default())
     }
 
-    fn occupied_entry<T: Sortable + Sync + Default>(v: &mut BTreeMap<T, T>) -> impl Sync + '_
-    where
-        T::State: Ord,
-    {
+    fn occupied_entry<T: Sync + OrdStoredKey + Default>(v: &mut BTreeMap<T, T>) -> impl Sync + '_ {
         match v.entry(Default::default()) {
             Occupied(entry) => entry,
             _ => unreachable!(),
         }
     }
 
-    fn vacant_entry<T: Sortable + Sync + Default>(v: &mut BTreeMap<T, T>) -> impl Sync + '_
-    where
-        T::State: Ord,
-    {
+    fn vacant_entry<T: Sync + OrdStoredKey + Default>(v: &mut BTreeMap<T, T>) -> impl Sync + '_ {
         match v.entry(Default::default()) {
             Vacant(entry) => entry,
             _ => unreachable!(),
@@ -1906,111 +1848,66 @@ fn assert_sync() {
 
 #[allow(dead_code)]
 fn assert_send() {
-    fn map<T: Sortable + Send>(v: BTreeMap<T, T>) -> impl Send
-    where
-        T::State: Ord,
-    {
+    fn map<T: Send + OrdStoredKey>(v: BTreeMap<T, T>) -> impl Send {
         v
     }
 
-    fn into_iter<T: Sortable + Send>(v: BTreeMap<T, T>) -> impl Send
-    where
-        T::State: Ord,
-    {
+    fn into_iter<T: Send + OrdStoredKey>(v: BTreeMap<T, T>) -> impl Send {
         v.into_iter()
     }
 
-    fn into_keys<T: Sortable + Send>(v: BTreeMap<T, T>) -> impl Send
-    where
-        T::State: Ord,
-    {
+    fn into_keys<T: Send + OrdStoredKey>(v: BTreeMap<T, T>) -> impl Send {
         v.into_keys()
     }
 
-    fn into_values<T: Sortable + Send>(v: BTreeMap<T, T>) -> impl Send
-    where
-        T::State: Ord,
-    {
+    fn into_values<T: Send + OrdStoredKey>(v: BTreeMap<T, T>) -> impl Send {
         v.into_values()
     }
 
-    fn drain_filter<T: Sortable + Send>(v: &mut BTreeMap<T, T>) -> impl Send + '_
-    where
-        T::State: Ord,
-    {
+    fn drain_filter<T: Send + OrdStoredKey>(v: &mut BTreeMap<T, T>) -> impl Send + '_ {
         v.drain_filter(|_, _| false)
     }
 
-    fn iter<T: Sortable + Send + Sync>(v: &BTreeMap<T, T>) -> impl Send + '_
-    where
-        T::State: Ord,
-    {
+    fn iter<T: Send + Sync + OrdStoredKey>(v: &BTreeMap<T, T>) -> impl Send + '_ {
         v.iter()
     }
 
-    fn iter_mut<T: Sortable + Send>(v: &mut BTreeMap<T, T>) -> impl Send + '_
-    where
-        T::State: Ord,
-    {
+    fn iter_mut<T: Send + OrdStoredKey>(v: &mut BTreeMap<T, T>) -> impl Send + '_ {
         v.iter_mut()
     }
 
-    fn keys<T: Sortable + Send + Sync>(v: &BTreeMap<T, T>) -> impl Send + '_
-    where
-        T::State: Ord,
-    {
+    fn keys<T: Send + Sync + OrdStoredKey>(v: &BTreeMap<T, T>) -> impl Send + '_ {
         v.keys()
     }
 
-    fn values<T: Sortable + Send + Sync>(v: &BTreeMap<T, T>) -> impl Send + '_
-    where
-        T::State: Ord,
-    {
+    fn values<T: Send + Sync + OrdStoredKey>(v: &BTreeMap<T, T>) -> impl Send + '_ {
         v.values()
     }
 
-    fn values_mut<T: Sortable + Send>(v: &mut BTreeMap<T, T>) -> impl Send + '_
-    where
-        T::State: Ord,
-    {
+    fn values_mut<T: Send + OrdStoredKey>(v: &mut BTreeMap<T, T>) -> impl Send + '_ {
         v.values_mut()
     }
 
-    fn range<T: Sortable + Send + Sync>(v: &BTreeMap<T, T>) -> impl Send + '_
-    where
-        T::State: Ord,
-    {
+    fn range<T: Send + Sync + OrdStoredKey>(v: &BTreeMap<T, T>) -> impl Send + '_ {
         v.range::<T, _>(..)
     }
 
-    fn range_mut<T: Sortable + Send>(v: &mut BTreeMap<T, T>) -> impl Send + '_
-    where
-        T::State: Ord,
-    {
+    fn range_mut<T: Send + OrdStoredKey>(v: &mut BTreeMap<T, T>) -> impl Send + '_ {
         v.range_mut::<T, _>(..)
     }
 
-    fn entry<T: Sortable + Send + Default>(v: &mut BTreeMap<T, T>) -> impl Send + '_
-    where
-        T::State: Ord,
-    {
+    fn entry<T: Send + OrdStoredKey + Default>(v: &mut BTreeMap<T, T>) -> impl Send + '_ {
         v.entry(Default::default())
     }
 
-    fn occupied_entry<T: Sortable + Send + Default>(v: &mut BTreeMap<T, T>) -> impl Send + '_
-    where
-        T::State: Ord,
-    {
+    fn occupied_entry<T: Send + OrdStoredKey + Default>(v: &mut BTreeMap<T, T>) -> impl Send + '_ {
         match v.entry(Default::default()) {
             Occupied(entry) => entry,
             _ => unreachable!(),
         }
     }
 
-    fn vacant_entry<T: Sortable + Send + Default>(v: &mut BTreeMap<T, T>) -> impl Send + '_
-    where
-        T::State: Ord,
-    {
+    fn vacant_entry<T: Send + OrdStoredKey + Default>(v: &mut BTreeMap<T, T>) -> impl Send + '_ {
         match v.entry(Default::default()) {
             Vacant(entry) => entry,
             _ => unreachable!(),
@@ -2020,7 +1917,7 @@ fn assert_send() {
 
 #[test]
 fn test_ord_absence() {
-    fn map<K, C: Copy>(mut map: BTreeMap<K, (), C>) {
+    fn map<K, C: Clone>(mut map: BTreeMap<K, (), C>) {
         let _ = map.is_empty();
         let _ = map.len();
         map.clear();
@@ -2039,7 +1936,7 @@ fn test_ord_absence() {
         }
     }
 
-    fn map_debug<K: Debug, C: Copy>(mut map: BTreeMap<K, (), C>) {
+    fn map_debug<K: Debug, C>(mut map: BTreeMap<K, (), C>) {
         format!("{map:?}");
         format!("{:?}", map.iter());
         format!("{:?}", map.iter_mut());
@@ -2056,7 +1953,7 @@ fn test_ord_absence() {
         }
     }
 
-    fn map_clone<K: Clone, C: Copy>(mut map: BTreeMap<K, (), C>) {
+    fn map_clone<K: Clone, C: Clone>(mut map: BTreeMap<K, (), C>) {
         map.clone_from(&map.clone());
     }
 
@@ -2075,14 +1972,14 @@ fn test_occupied_entry_key() {
     assert_eq!(a.height(), None);
     a.insert(key, value);
     assert_eq!(a.len(), 1);
-    assert_eq!(a[key], value);
+    assert_eq!(a[&key], value);
 
     match a.entry(key) {
         Vacant(_) => panic!(),
         Occupied(e) => assert_eq!(key, *e.key()),
     }
     assert_eq!(a.len(), 1);
-    assert_eq!(a[key], value);
+    assert_eq!(a[&key], value);
     a.check();
 }
 
@@ -2101,7 +1998,7 @@ fn test_vacant_entry_key() {
         }
     }
     assert_eq!(a.len(), 1);
-    assert_eq!(a[key], value);
+    assert_eq!(a[&key], value);
     a.check();
 }
 
@@ -2506,7 +2403,7 @@ fn test_into_iter_drop_leak_height_0() {
     let c = CrashTestDummy::new(2);
     let d = CrashTestDummy::new(3);
     let e = CrashTestDummy::new(4);
-    let mut map = BTreeMap::default();
+    let mut map = BTreeMap::<_, _, OrdComparator<str>>::default();
     map.insert("a", a.spawn(Panic::Never));
     map.insert("b", b.spawn(Panic::Never));
     map.insert("c", c.spawn(Panic::Never));

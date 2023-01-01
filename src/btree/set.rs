@@ -2,7 +2,6 @@
 // to TreeMap
 
 use alloc::vec::Vec;
-use core::borrow::Borrow;
 use core::cmp::Ordering::{self, Equal, Greater, Less};
 use core::cmp::{max, min};
 use core::fmt::{self, Debug};
@@ -11,7 +10,7 @@ use core::iter::{FromIterator, FusedIterator, Peekable};
 use core::mem::ManuallyDrop;
 use core::ops::{BitAnd, BitOr, BitXor, RangeBounds, Sub};
 
-use crate::{std_ord::Ord as _, Comparator, MinCmpFn, Sortable};
+use crate::{Comparator, LookupKey, OrdComparator};
 
 use super::map::{BTreeMap, Keys};
 use super::merge_iter::MergeIterInner;
@@ -81,7 +80,7 @@ use crate::polyfill::*;
 // #[cfg_attr(not(test), rustc_diagnostic_item = "BTreeSet")]
 pub struct BTreeSet<
     T,
-    C = MinCmpFn<T>,
+    C = OrdComparator<T>,
     // #[unstable(feature = "allocator_api", issue = "32838")]
     A: Allocator + Clone = Global,
 > {
@@ -217,8 +216,7 @@ enum DifferenceInner<'a, T: 'a, C, A: Allocator + Clone> {
 // Explicit Debug impl necessary because of issue #26925
 impl<T: Debug, C, A: Allocator + Clone> Debug for DifferenceInner<'_, T, C, A>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    C: Comparator,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -246,8 +244,7 @@ where
 // #[stable(feature = "collection_debug", since = "1.17.0")]
 impl<T: fmt::Debug, C, A: Allocator + Clone> fmt::Debug for Difference<'_, T, C, A>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    C: Comparator,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Difference").field(&self.inner).finish()
@@ -308,8 +305,7 @@ enum IntersectionInner<'a, T: 'a, C, A: Allocator + Clone> {
 // Explicit Debug impl necessary because of issue #26925
 impl<T: Debug, C, A: Allocator + Clone> Debug for IntersectionInner<'_, T, C, A>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    C: Comparator,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -334,8 +330,7 @@ where
 // #[stable(feature = "collection_debug", since = "1.17.0")]
 impl<T: Debug, C, A: Allocator + Clone> Debug for Intersection<'_, T, C, A>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    C: Comparator,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Intersection").field(&self.inner).finish()
@@ -376,10 +371,41 @@ impl<T, C> BTreeSet<T, C> {
     /// # Examples
     ///
     /// ```
-    /// # #![allow(unused_mut)]
-    /// use copse::BTreeSet;
+    /// # use core::cmp::Ordering;
+    /// # use copse::{Comparator, LookupKey, BTreeSet};
+    /// #
+    /// // define a comparator
+    /// struct NthByteComparator {
+    ///     n: usize, // runtime state
+    /// }
+    /// 
+    /// impl Comparator for NthByteComparator {
+    ///     // etc
+    /// #     type Key = str;
+    /// #     fn cmp(&self, this: &str, that: &str) -> Ordering {
+    /// #         match (this.as_bytes().get(self.n), that.as_bytes().get(self.n)) {
+    /// #             (Some(lhs), Some(rhs)) => lhs.cmp(rhs),
+    /// #             (Some(_), None) => Ordering::Greater,
+    /// #             (None, Some(_)) => Ordering::Less,
+    /// #             (None, None) => Ordering::Equal,
+    /// #         }
+    /// #     }
+    /// }
+    /// 
+    /// // define lookup key types for collections sorted by our comparator
+    /// impl LookupKey<NthByteComparator> for String {
+    ///     // etc
+    /// #     fn key(&self) -> &str { self.as_str() }
+    /// }
+    /// # impl LookupKey<NthByteComparator> for str {
+    /// #     fn key(&self) -> &str { self }
+    /// # }
+    /// 
+    /// // create a set using our comparator
+    /// let mut set = BTreeSet::new(NthByteComparator { n: 10 });
     ///
-    /// let mut set: BTreeSet<i32> = BTreeSet::default();
+    /// // entries can now be inserted into the empty map
+    /// assert!(set.insert("abcdefghij".to_string()));
     /// ```
     // #[stable(feature = "rust1", since = "1.0.0")]
     // #[rustc_const_stable(feature = "const_btree_new", since = "1.66.0")]
@@ -393,8 +419,8 @@ impl<T, C> BTreeSet<T, C> {
 
 impl<T, C, A: Allocator + Clone> BTreeSet<T, C, A>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    T: LookupKey<C>,
+    C: Comparator,
 {
     /// Makes a new `BTreeSet` with a reasonable choice of B ordered by the given `comparator`.
     ///
@@ -403,10 +429,10 @@ where
     /// ```
     /// #![feature(allocator_api)]
     ///
-    /// use copse::BTreeSet;
+    /// use copse::{BTreeSet, OrdComparator};
     /// use std::alloc::Global;
     ///
-    /// let mut set: BTreeSet<i32> = BTreeSet::new_in(Ord::cmp, Global);
+    /// let mut set: BTreeSet<i32, _> = BTreeSet::new_in(OrdComparator::default(), Global);
     /// ```
     // #[unstable(feature = "btreemap_alloc", issue = "32838")]
     #[cfg(feature = "allocator_api")]
@@ -446,7 +472,7 @@ where
     // #[stable(feature = "btree_range", since = "1.17.0")]
     pub fn range<K: ?Sized, R>(&self, range: R) -> Range<'_, T>
     where
-        K: Borrow<T::State>,
+        K: LookupKey<C>,
         R: RangeBounds<K>,
     {
         Range {
@@ -496,12 +522,8 @@ where
             };
         Difference {
             inner: match (
-                self.map
-                    .comparator
-                    .cmp(self_min.borrow(), other_max.borrow()),
-                self.map
-                    .comparator
-                    .cmp(self_max.borrow(), other_min.borrow()),
+                self.map.comparator.cmp(self_min.key(), other_max.key()),
+                self.map.comparator.cmp(self_max.key(), other_min.key()),
             ) {
                 (Greater, _) | (_, Less) => DifferenceInner::Iterate(self.iter()),
                 (Equal, _) => {
@@ -602,12 +624,8 @@ where
             };
         Intersection {
             inner: match (
-                self.map
-                    .comparator
-                    .cmp(self_min.borrow(), other_max.borrow()),
-                self.map
-                    .comparator
-                    .cmp(self_max.borrow(), other_min.borrow()),
+                self.map.comparator.cmp(self_min.key(), other_max.key()),
+                self.map.comparator.cmp(self_max.key(), other_min.key()),
             ) {
                 (Greater, _) | (_, Less) => IntersectionInner::Answer(None),
                 (Equal, _) => IntersectionInner::Answer(Some(self_min)),
@@ -677,7 +695,7 @@ where
     // #[stable(feature = "rust1", since = "1.0.0")]
     pub fn contains<Q: ?Sized>(&self, value: &Q) -> bool
     where
-        Q: Borrow<T::State>,
+        Q: LookupKey<C>,
     {
         self.map.contains_key(value)
     }
@@ -701,7 +719,7 @@ where
     // #[stable(feature = "set_recovery", since = "1.9.0")]
     pub fn get<Q: ?Sized>(&self, value: &Q) -> Option<&T>
     where
-        Q: Borrow<T::State>,
+        Q: LookupKey<C>,
     {
         Recover::get(&self.map, value)
     }
@@ -767,22 +785,14 @@ where
                 return false; // other is empty
             };
         let mut self_iter = self.iter();
-        match self
-            .map
-            .comparator
-            .cmp(self_min.borrow(), other_min.borrow())
-        {
+        match self.map.comparator.cmp(self_min.key(), other_min.key()) {
             Less => return false,
             Equal => {
                 self_iter.next();
             }
             Greater => (),
         }
-        match self
-            .map
-            .comparator
-            .cmp(self_max.borrow(), other_max.borrow())
-        {
+        match self.map.comparator.cmp(self_max.key(), other_max.key()) {
             Greater => return false,
             Equal => {
                 self_iter.next_back();
@@ -802,7 +812,7 @@ where
             let mut self_next = self_iter.next();
             while let Some(self1) = self_next {
                 match other_iter.next().map_or(Less, |other1| {
-                    self.map.comparator.cmp(self1.borrow(), other1.borrow())
+                    self.map.comparator.cmp(self1.key(), other1.key())
                 }) {
                     Less => return false,
                     Equal => self_next = self_iter.next(),
@@ -997,7 +1007,7 @@ where
     // #[stable(feature = "rust1", since = "1.0.0")]
     pub fn remove<Q: ?Sized>(&mut self, value: &Q) -> bool
     where
-        Q: Borrow<T::State>,
+        Q: LookupKey<C>,
     {
         self.map.remove(value).is_some()
     }
@@ -1021,7 +1031,7 @@ where
     // #[stable(feature = "set_recovery", since = "1.9.0")]
     pub fn take<Q: ?Sized>(&mut self, value: &Q) -> Option<T>
     where
-        Q: Borrow<T::State>,
+        Q: LookupKey<C>,
     {
         Recover::take(&mut self.map, value)
     }
@@ -1120,7 +1130,7 @@ where
     where
         A: Clone,
         C: Clone,
-        Q: Borrow<T::State>,
+        Q: LookupKey<C>,
     {
         BTreeSet {
             map: self.map.split_off(value),
@@ -1270,12 +1280,12 @@ impl<T, C, A: Allocator + Clone> BTreeSet<T, C, A> {
 }
 
 // #[stable(feature = "rust1", since = "1.0.0")]
-impl<T> FromIterator<T> for BTreeSet<T, MinCmpFn<T>>
+impl<T, C> FromIterator<T> for BTreeSet<T, C>
 where
-    T: Sortable,
-    T::State: Ord,
+    T: LookupKey<C>,
+    C: Comparator + Default,
 {
-    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> BTreeSet<T, MinCmpFn<T>> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> BTreeSet<T, C> {
         let mut inputs: Vec<_> = iter.into_iter().collect();
 
         if inputs.is_empty() {
@@ -1283,15 +1293,16 @@ where
         }
 
         // use stable sort to preserve the insertion order.
-        inputs.sort_by(|a, b| a.borrow().cmp(b.borrow()));
-        BTreeSet::from_sorted_iter(inputs.into_iter(), T::State::cmp_fn(), Global)
+        let comparator = C::default();
+        inputs.sort_by(|a, b| comparator.cmp(a.key(), b.key()));
+        BTreeSet::from_sorted_iter(inputs.into_iter(), comparator, Global)
     }
 }
 
 impl<T, C, A: Allocator + Clone> BTreeSet<T, C, A>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    T: LookupKey<C>,
+    C: Comparator,
 {
     fn from_sorted_iter<I: Iterator<Item = T>>(
         iter: I,
@@ -1305,10 +1316,10 @@ where
 }
 
 // #[stable(feature = "std_collections_from_array", since = "1.56.0")]
-impl<T, const N: usize> From<[T; N]> for BTreeSet<T, MinCmpFn<T>>
+impl<T, C, const N: usize> From<[T; N]> for BTreeSet<T, C>
 where
-    T: Sortable,
-    T::State: Ord,
+    T: LookupKey<C>,
+    C: Comparator + Default,
 {
     /// Converts a `[T; N]` into a `BTreeSet<T>`.
     ///
@@ -1325,9 +1336,10 @@ where
         }
 
         // use stable sort to preserve the insertion order.
-        arr.sort_by(|a, b| a.borrow().cmp(b.borrow()));
+        let comparator = C::default();
+        arr.sort_by(|a, b| comparator.cmp(a.key(), b.key()));
         let iter = IntoIterator::into_iter(arr).map(|k| (k, SetValZST::default()));
-        let map = BTreeMap::bulk_build_from_sorted_iter(iter, T::State::cmp_fn(), Global);
+        let map = BTreeMap::bulk_build_from_sorted_iter(iter, comparator, Global);
         BTreeSet { map }
     }
 }
@@ -1359,8 +1371,7 @@ impl<T, C, A: Allocator + Clone> IntoIterator for BTreeSet<T, C, A> {
 // #[stable(feature = "rust1", since = "1.0.0")]
 impl<'a, T, C, A: Allocator + Clone> IntoIterator for &'a BTreeSet<T, C, A>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    C: Comparator,
 {
     type Item = &'a T;
     type IntoIter = Iter<'a, T>;
@@ -1440,8 +1451,8 @@ impl<T, F, A: Allocator + Clone> FusedIterator for DrainFilter<'_, T, F, A> wher
 // #[stable(feature = "rust1", since = "1.0.0")]
 impl<T, C, A: Allocator + Clone> Extend<T> for BTreeSet<T, C, A>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    T: LookupKey<C>,
+    C: Comparator,
 {
     #[inline]
     fn extend<Iter: IntoIterator<Item = T>>(&mut self, iter: Iter) {
@@ -1460,8 +1471,8 @@ where
 // #[stable(feature = "extend_ref", since = "1.2.0")]
 impl<'a, T: 'a + Ord + Copy, C, A: Allocator + Clone> Extend<&'a T> for BTreeSet<T, C, A>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    T: LookupKey<C>,
+    C: Comparator,
 {
     fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
         self.extend(iter.into_iter().cloned());
@@ -1475,22 +1486,22 @@ where
 }
 
 // #[stable(feature = "rust1", since = "1.0.0")]
-impl<T> Default for BTreeSet<T, MinCmpFn<T>>
+impl<T, C> Default for BTreeSet<T, C>
 where
-    T: Sortable,
-    T::State: Ord,
+    T: LookupKey<C>,
+    C: Comparator + Default,
 {
     /// Creates an empty `BTreeSet` ordered by the `Ord` trait.
-    fn default() -> BTreeSet<T, MinCmpFn<T>> {
-        BTreeSet::new(T::State::cmp_fn())
+    fn default() -> BTreeSet<T, C> {
+        BTreeSet::new(C::default())
     }
 }
 
 // #[stable(feature = "rust1", since = "1.0.0")]
 impl<T: Clone, C: Clone, A: Allocator + Clone> Sub<&BTreeSet<T, C, A>> for &BTreeSet<T, C, A>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    T: LookupKey<C>,
+    C: Comparator,
 {
     type Output = BTreeSet<T, C, A>;
 
@@ -1519,8 +1530,8 @@ where
 // #[stable(feature = "rust1", since = "1.0.0")]
 impl<T: Clone, C: Clone, A: Allocator + Clone> BitXor<&BTreeSet<T, C, A>> for &BTreeSet<T, C, A>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    T: LookupKey<C>,
+    C: Comparator,
 {
     type Output = BTreeSet<T, C, A>;
 
@@ -1549,8 +1560,8 @@ where
 // #[stable(feature = "rust1", since = "1.0.0")]
 impl<T: Clone, C: Clone, A: Allocator + Clone> BitAnd<&BTreeSet<T, C, A>> for &BTreeSet<T, C, A>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    T: LookupKey<C>,
+    C: Comparator,
 {
     type Output = BTreeSet<T, C, A>;
 
@@ -1579,8 +1590,8 @@ where
 // #[stable(feature = "rust1", since = "1.0.0")]
 impl<T: Clone, C: Clone, A: Allocator + Clone> BitOr<&BTreeSet<T, C, A>> for &BTreeSet<T, C, A>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    T: LookupKey<C>,
+    C: Comparator,
 {
     type Output = BTreeSet<T, C, A>;
 
@@ -1757,8 +1768,8 @@ impl<T, C, A: Allocator + Clone> Clone for Difference<'_, T, C, A> {
 // #[stable(feature = "rust1", since = "1.0.0")]
 impl<'a, T, C, A: Allocator + Clone> Iterator for Difference<'a, T, C, A>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    T: LookupKey<C>,
+    C: Comparator,
 {
     type Item = &'a T;
 
@@ -1771,7 +1782,7 @@ where
                 let mut self_next = self_iter.next()?;
                 loop {
                     match other_iter.peek().map_or(Less, |&other_next| {
-                        self.comparator.cmp(self_next.borrow(), other_next.borrow())
+                        self.comparator.cmp(self_next.key(), other_next.key())
                     }) {
                         Less => return Some(self_next),
                         Equal => {
@@ -1820,8 +1831,8 @@ where
 // #[stable(feature = "fused", since = "1.26.0")]
 impl<T, C, A: Allocator + Clone> FusedIterator for Difference<'_, T, C, A>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    T: LookupKey<C>,
+    C: Comparator,
 {
 }
 
@@ -1834,16 +1845,14 @@ impl<T, C> Clone for SymmetricDifference<'_, T, C> {
 // #[stable(feature = "rust1", since = "1.0.0")]
 impl<'a, T, C> Iterator for SymmetricDifference<'a, T, C>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    T: LookupKey<C>,
+    C: Comparator,
 {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
         loop {
-            let (a_next, b_next) = self
-                .0
-                .nexts(&|a: &&T, b: &&T| self.1.cmp((*a).borrow(), (*b).borrow()));
+            let (a_next, b_next) = self.0.nexts(|&a, &b| self.1.cmp(a.key(), b.key()));
             if a_next.and(b_next).is_none() {
                 return a_next.or(b_next);
             }
@@ -1866,8 +1875,8 @@ where
 // #[stable(feature = "fused", since = "1.26.0")]
 impl<T, C> FusedIterator for SymmetricDifference<'_, T, C>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    T: LookupKey<C>,
+    C: Comparator,
 {
 }
 
@@ -1896,8 +1905,8 @@ impl<T, C: Clone, A: Allocator + Clone> Clone for Intersection<'_, T, C, A> {
 // #[stable(feature = "rust1", since = "1.0.0")]
 impl<'a, T, C, A: Allocator + Clone> Iterator for Intersection<'a, T, C, A>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    T: LookupKey<C>,
+    C: Comparator,
 {
     type Item = &'a T;
 
@@ -1907,7 +1916,7 @@ where
                 let mut a_next = a.next()?;
                 let mut b_next = b.next()?;
                 loop {
-                    match self.comparator.cmp(a_next.borrow(), b_next.borrow()) {
+                    match self.comparator.cmp(a_next.key(), b_next.key()) {
                         Less => a_next = a.next()?,
                         Greater => b_next = b.next()?,
                         Equal => return Some(a_next),
@@ -1944,8 +1953,8 @@ where
 // #[stable(feature = "fused", since = "1.26.0")]
 impl<T, C, A: Allocator + Clone> FusedIterator for Intersection<'_, T, C, A>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    T: LookupKey<C>,
+    C: Comparator,
 {
 }
 
@@ -1958,15 +1967,13 @@ impl<T, C> Clone for Union<'_, T, &C> {
 // #[stable(feature = "rust1", since = "1.0.0")]
 impl<'a, T, C> Iterator for Union<'a, T, C>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    T: LookupKey<C>,
+    C: Comparator,
 {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
-        let (a_next, b_next) = self
-            .0
-            .nexts(&|a: &&T, b: &&T| self.1.cmp((*a).borrow(), (*b).borrow()));
+        let (a_next, b_next) = self.0.nexts(|&a, &b| self.1.cmp(a.key(), b.key()));
         a_next.or(b_next)
     }
 
@@ -1984,8 +1991,8 @@ where
 // #[stable(feature = "fused", since = "1.26.0")]
 impl<T, C> FusedIterator for Union<'_, T, C>
 where
-    T: Sortable,
-    C: Comparator<T::State>,
+    T: LookupKey<C>,
+    C: Comparator,
 {
 }
 

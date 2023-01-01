@@ -1,9 +1,8 @@
-use core::borrow::Borrow;
 use core::hint;
 use core::ops::RangeBounds;
 use core::ptr;
 
-use crate::{Comparator, Sortable};
+use crate::{Comparator, LookupKey};
 
 use super::node::{marker, ForceResult::*, Handle, NodeRef};
 
@@ -266,15 +265,16 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
     /// # Safety
     /// Unless `BorrowType` is `Immut`, do not use the handles to visit the same
     /// KV twice.
-    unsafe fn find_leaf_edges_spanning_range<Q, R>(
+    unsafe fn find_leaf_edges_spanning_range<Q, R, C>(
         self,
-        comparator: &impl Comparator<K::State>,
+        comparator: &C,
         range: R,
     ) -> LeafRange<BorrowType, K, V>
     where
-        K: Sortable,
-        Q: ?Sized + Borrow<K::State>,
+        K: LookupKey<C>,
+        Q: ?Sized + LookupKey<C>,
         R: RangeBounds<Q>,
+        C: Comparator,
     {
         match self.search_tree_for_bifurcation(comparator, &range) {
             Err(_) => LeafRange::none(),
@@ -326,15 +326,16 @@ impl<'a, K: 'a, V: 'a> NodeRef<marker::Immut<'a>, K, V, marker::LeafOrInternal> 
     ///
     /// The result is meaningful only if the tree is ordered by key, like the tree
     /// in a `BTreeMap` is.
-    pub fn range_search<Q, R>(
+    pub fn range_search<Q, R, C>(
         self,
-        comparator: &impl Comparator<K::State>,
+        comparator: &C,
         range: R,
     ) -> LeafRange<marker::Immut<'a>, K, V>
     where
-        K: Sortable,
-        Q: ?Sized + Borrow<K::State>,
+        K: LookupKey<C>,
+        Q: ?Sized + LookupKey<C>,
         R: RangeBounds<Q>,
+        C: Comparator,
     {
         // SAFETY: our borrow type is immutable.
         unsafe { self.find_leaf_edges_spanning_range(comparator, range) }
@@ -356,15 +357,16 @@ impl<'a, K: 'a, V: 'a> NodeRef<marker::ValMut<'a>, K, V, marker::LeafOrInternal>
     ///
     /// # Safety
     /// Do not use the duplicate handles to visit the same KV twice.
-    pub fn range_search<Q, R>(
+    pub fn range_search<Q, R, C>(
         self,
-        comparator: &impl Comparator<K::State>,
+        comparator: &C,
         range: R,
     ) -> LeafRange<marker::ValMut<'a>, K, V>
     where
-        K: Sortable,
-        Q: ?Sized + Borrow<K::State>,
+        K: LookupKey<C>,
+        Q: ?Sized + LookupKey<C>,
         R: RangeBounds<Q>,
+        C: Comparator,
     {
         unsafe { self.find_leaf_edges_spanning_range(comparator, range) }
     }

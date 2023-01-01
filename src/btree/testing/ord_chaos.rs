@@ -1,3 +1,4 @@
+use crate::OrdStoredKey;
 use std::cell::Cell;
 use std::cmp::Ordering::{self, *};
 use std::ptr;
@@ -11,10 +12,8 @@ pub enum Cyclic3 {
 }
 use Cyclic3::*;
 
-use crate::Sortable;
-
-impl Sortable for Cyclic3 {
-    type State = Self;
+impl OrdStoredKey for Cyclic3 {
+    type DefaultComparisonKey = Self;
 }
 
 impl PartialOrd for Cyclic3 {
@@ -65,8 +64,8 @@ impl Governor {
 #[derive(Debug)]
 pub struct Governed<'a, T>(pub T, pub &'a Governor);
 
-impl<T> Sortable for Governed<'_, T> {
-    type State = Self;
+impl<T: Ord> OrdStoredKey for Governed<'_, T> {
+    type DefaultComparisonKey = Self;
 }
 
 impl<T: Ord> PartialOrd for Governed<'_, T> {

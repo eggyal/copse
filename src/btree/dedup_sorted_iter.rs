@@ -1,6 +1,6 @@
 use core::iter::Peekable;
 
-use crate::{Comparator, Sortable};
+use crate::{Comparator, LookupKey};
 
 /// A iterator for deduping the key of a sorted iterator.
 /// When encountering the duplicated key, only the last key-value pair is yielded.
@@ -30,8 +30,8 @@ where
 
 impl<K, V, C, I> Iterator for DedupSortedIter<'_, K, V, C, I>
 where
-    K: Sortable,
-    C: Comparator<K::State>,
+    K: LookupKey<C>,
+    C: Comparator,
     I: Iterator<Item = (K, V)>,
 {
     type Item = (K, V);
@@ -48,11 +48,7 @@ where
                 None => return Some(next),
             };
 
-            if self
-                .comparator
-                .cmp(next.0.borrow(), peeked.0.borrow())
-                .is_ne()
-            {
+            if self.comparator.cmp(next.0.key(), peeked.0.key()).is_ne() {
                 return Some(next);
             }
         }

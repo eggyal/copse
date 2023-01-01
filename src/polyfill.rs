@@ -114,8 +114,8 @@ mod definitions {
         #[inline]
         fn new_uninit_in(alloc: A) -> Box!(MaybeUninit<T>, A) {
             cfg_if! {
-                if #[cfg(feature = "new_uninit")] {
-                    Self::new_uninit_in(alloc)
+                if #[cfg(all(feature = "allocator_api", feature = "new_uninit"))] {
+                    <Box!(_, _)>::new_uninit_in(alloc)
                 } else {
                     unsafe {
                         let layout = Layout::new::<MaybeUninit<T>>();
@@ -132,7 +132,7 @@ mod definitions {
         fn new_uninit() -> Box!(MaybeUninit<T>) {
             cfg_if! {
                 if #[cfg(feature = "new_uninit")] {
-                    Self::new_uninit()
+                    <Box!(_)>::new_uninit()
                 } else {
                     <Box!(_)>::new_uninit_in(Global)
                 }

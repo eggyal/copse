@@ -3,7 +3,7 @@ use alloc::fmt::Debug;
 use std::cmp::Ordering;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 
-use crate::Sortable;
+use crate::OrdStoredKey;
 
 /// A blueprint for crash test dummy instances that monitor particular events.
 /// Some instances may be configured to panic at some point.
@@ -61,8 +61,8 @@ pub struct Instance<'a> {
     panic: Panic,
 }
 
-impl Sortable for Instance<'_> {
-    type State = Self;
+impl OrdStoredKey for Instance<'_> {
+    type DefaultComparisonKey = Self;
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

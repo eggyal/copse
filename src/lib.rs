@@ -13,48 +13,60 @@
 //! order.
 //!
 //! However, copse's collections do not use the [`Ord`] trait; instead, lookups can only ever
-//! be performed using the [`Comparator<T>`] supplied upon collection creation.  This comparator
-//! can only compare values of type `&T` for which it was defined, and hence such type must be
-//! reachable from any key type `&Q` used to perform lookups in the collection.  copse ensures
-//! this via its [`Sortable`] trait, which will typically be implemented by the stored key type
-//! `K`; its [`State`][Sortable::State] associated type then specifies the `T` in which
-//! comparisons will be performed, and values of type `&Q` can be used as lookup keys provided
-//! that `Q: Borrow<T>`.
+//! be performed using the [`Comparator`] supplied upon collection creation.  This comparator
+//! can only compare values of its [`Key`][Comparator::Key] associated type, and hence keys used
+//! for lookups must implement [`LookupKey<C>`] in order that the conversion can be performed.
 //!
-//! For example, a collection using a `Comparator<str>` comparator can store keys of type
-//! `String` because `String` implements `Sortable<State = str>`; moreover, lookups can be
-//! performed using keys of type `&str` because `str` implements `Borrow<str>` (due to the
-//! reflexive blanket implementation).
-//!
-//! Implementations of [`Sortable`] are provided for primitive and some common standard library
-//! types, but storing keys of other foreign types may require newtyping.
-//!
-//! # Function item types
-//! In addition to the type parameters familiar from the standard library collections, copse's
-//! collections are additionally parameterised by the type of the [`Comparator`].  If the
-//! comparator type is not explicitly named, it defaults to the type of the [`Ord::cmp`]
-//! function for `K::State`.  As noted in the documentation of the [`CmpFn`] type alias, this
-//! is only a zero-sized function item type if the unstable `type_alias_impl_trait` feature is
-//! enabled; otherwise it is a function pointer type, with ensuing size and indirect call
-//! implications.  Collections built using the zero-sized function item type can still be
-//! used in stable code, however; just not using the default type parameter.  For example:
-//!
+//! # Example
 //! ```rust
-//! # use std::cmp::Ord;
-//! # use copse::BTreeMap;
-//! let mut ord_map = BTreeMap::new(Ord::cmp);
-//! # ord_map.insert(123, "hello");
+//! # use core::cmp::Ordering;
+//! # use copse::{Comparator, LookupKey, BTreeSet};
+//! #
+//! // define a comparator
+//! struct NthByteComparator {
+//!     n: usize, // runtime state
+//! }
+//!
+//! impl Comparator for NthByteComparator {
+//!     type Key = str;
+//!     fn cmp(&self, this: &str, that: &str) -> Ordering {
+//!         match (this.as_bytes().get(self.n), that.as_bytes().get(self.n)) {
+//!             (Some(lhs), Some(rhs)) => lhs.cmp(rhs),
+//!             (Some(_), None) => Ordering::Greater,
+//!             (None, Some(_)) => Ordering::Less,
+//!             (None, None) => Ordering::Equal,
+//!         }
+//!     }
+//! }
+//!
+//! // define lookup key types for collections sorted by our comparator
+//! impl LookupKey<NthByteComparator> for String {
+//!     fn key(&self) -> &str { self.as_str() }
+//! }
+//! impl LookupKey<NthByteComparator> for str {
+//!     fn key(&self) -> &str { self }
+//! }
+//!
+//! // create a collection using our comparator
+//! let mut set = BTreeSet::new(NthByteComparator { n: 10 });
+//! assert!(set.insert("abcdefghij".to_string()));
+//! assert!(!set.insert("xxxxxxxxxj".to_string()));
+//! assert!(set.contains("jjjjjjjjjj"));
 //! ```
 //!
-//! However, naming this type carries the usual problems associated with anonymous types like
-//! closures; in certain situations you may be able to use `impl Comparator` for the type
-//! parameter, but in other situations (in stable code) the function pointer may be
-//! unavoidable.
+//! # Collection type parameters
+//! In addition to the type parameters familiar from the standard library collections, copse's
+//! collections are additionally parameterised by the type of the [`Comparator`].  If the
+//! comparator type is not explicitly named, it defaults to the [`OrdComparator`] for the
+//! storage key's [`DefaultComparisonKey`][OrdStoredKey::DefaultComparisonKey], which yields
+//! behaviour analagous to the standard library collections (i.e. sorted by the `Ord` trait).
+//! If you find yourself using these items, then you should probably ditch copse for the
+//! standard library instead.
 //!
 //! # Crate feature flags
 //! This crate defines a number of feature flags, none of which are enabled by default:
 //!
-//! * the `std` feature provides [`Sortable`] implementations for some libstd types
+//! * the `std` feature provides [`OrdStoredKey`] implementations for some libstd types
 //!   that are not available in libcore + liballoc, namely [`OsString`] and [`PathBuf`];
 //!
 //! * the `unstable` feature enables all other crate features, each of which enables the
@@ -64,12 +76,11 @@
 //!   they are nevertheless included to ease tracking of the stdlib implementations.
 //!   
 //!   The most visible differences to library users will be:
-//!     * `allocator_api` enables the `new_in` methods for use of custom allocators;
-//!     * `specialization` adds the collection type name to some panic messages;
-//!     * `type_alias_impl_trait`, as mentioned above, ensures that the *default*
-//!        [`Comparator`] type parameter for the collections is the zero-sized function
-//!        item type of the `K::State::cmp` function.
+//!     * `allocator_api` enables the `new_in` methods for use of custom allocators; and
+//!     * `specialization` adds the collection type name to some panic messages.
 //!
+//! [`Borrow`]: std::borrow::Borrow
+//! [`Borrow<Q>`]: std::borrow::Borrow
 //! [`Ord`]: std::cmp::Ord
 //! [`Ord::cmp`]: std::cmp::Ord::cmp
 //! [`OsString`]: std::ffi::OsString
@@ -94,7 +105,6 @@
 #![cfg_attr(feature = "rustc_attrs", feature(rustc_attrs))]
 #![cfg_attr(feature = "slice_ptr_get", feature(slice_ptr_get))]
 #![cfg_attr(feature = "specialization", feature(specialization))]
-#![cfg_attr(feature = "type_alias_impl_trait", feature(type_alias_impl_trait))]
 // documentation controls
 #![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg))]
 #![deny(missing_docs)]
@@ -105,7 +115,7 @@
 extern crate alloc;
 
 use cfg_if::cfg_if;
-use core::{borrow::Borrow, cmp::Ordering};
+use core::{cmp::Ordering, marker::PhantomData};
 
 #[macro_use]
 mod polyfill;
@@ -117,99 +127,105 @@ pub use btree::{map, set};
 pub use map::BTreeMap;
 pub use set::BTreeSet;
 
-mod std_ord {
-    use cfg_if::cfg_if;
-    use core::cmp::{Ord as StdOrd, Ordering};
+/// A comparator defines a total order over its associated type `Key`.
+pub trait Comparator {
+    /// The type over which this comparator defines a total order.
+    type Key: ?Sized;
 
-    // This trait and its associated type are deliberately named to conflict with
-    // the `Ord::cmp` function so that the generated documentation for the [`CmpFn<T>`]
-    // type alias more naturally fits with how one might expect to name a function item
-    // type.
-    pub trait Ord: StdOrd {
-        #[allow(non_camel_case_types)]
-        type cmp: Copy + Fn(&Self, &Self) -> Ordering;
-        fn cmp_fn() -> Self::cmp;
-    }
-
-    impl<O: ?Sized + StdOrd> Ord for O {
-        cfg_if! {
-            if #[cfg(feature = "type_alias_impl_trait")] {
-                // With the TAIT feature, we can obtain the (otherwise anonymous)
-                // true (zero-sized) function item type.
-                type cmp = impl Copy + Fn(&Self, &Self) -> Ordering;
-            } else {
-                // Otherwise, we just use a function pointer (with ensuing storage)
-                // and indirect call implications.
-                type cmp = fn(&Self, &Self) -> Ordering;
-            }
-        }
-
-        fn cmp_fn() -> Self::cmp {
-            Self::cmp
-        }
-    }
-
-    /// Alias for the type of the `<T as Ord>::cmp` function.
+    /// Compare two values and return the position of `this` relative
+    /// to `that` according to the total order defined by this comparator.
     ///
-    /// Note that, unless the `type_alias_impl_trait` feature is enabled, this is
-    /// just the relevant function pointer type (and therefore is not zero-sized).
-    /// However, with that (unstable) feature enabled, this is an alias for the
-    /// actual zero-sized function item type.
-    pub type CmpFn<T> = <T as Ord>::cmp;
+    /// The comparison must satisfy both transitivity and duality.
+    fn cmp(&self, this: &Self::Key, that: &Self::Key) -> Ordering;
 }
 
-pub use std_ord::CmpFn;
+/// A zero-sized comparator that delegates to the [`Ord`] implementation
+/// of its type parameter `T`.
+pub struct OrdComparator<T: ?Sized + Ord>(PhantomData<fn(&T)>);
 
-/// Alias for the `Ord::cmp` function of `K::State`.
-pub type MinCmpFn<K> = CmpFn<<K as Sortable>::State>;
-
-/// A comparator defines a total order over its type parameter `T`.
-pub trait Comparator<T: ?Sized> {
-    /// Compare two values and return their relative positions
-    /// according to the total order defined by this comparator.
-    fn cmp(&self, this: &T, that: &T) -> Ordering;
-}
-
-// Blanket `Comparator` implementation for all suitable functions and closures
-impl<T: ?Sized, F: Fn(&T, &T) -> Ordering> Comparator<T> for F {
-    fn cmp(&self, this: &T, that: &T) -> Ordering {
-        self(this, that)
+impl<T: ?Sized + Ord> Default for OrdComparator<T> {
+    fn default() -> Self {
+        Self(PhantomData)
     }
 }
 
-/// A sortable type.  See the [crate's documentation][crate] for details.
-pub trait Sortable: Borrow<Self::State> {
-    /// A type that can be borrowed from `Self` and which contains all state necessary
-    /// for sorting.
-    type State: ?Sized;
+impl<T: ?Sized + Ord> Clone for OrdComparator<T> {
+    fn clone(&self) -> Self {
+        Self(PhantomData)
+    }
 }
 
-///////// `Sortable` implementations for standard library types /////////
+impl<T: ?Sized + Ord> Copy for OrdComparator<T> {}
 
-macro_rules! minimals {
+impl<T: ?Sized + Ord> Comparator for OrdComparator<T> {
+    type Key = T;
+    fn cmp(&self, this: &T, that: &T) -> Ordering {
+        this.cmp(that)
+    }
+}
+
+/// A type that can be used as a lookup key in collections that are sorted by comparators of
+/// type `C`.
+///
+/// For example, if `MyComparator` is a [`Comparator<str>`], then you may wish to implement
+/// `LookupKey<MyComparator>` for both `String` and `str` in order that keys of those types
+/// can be used to search collections ordered by a comparator of type `MyComparator`.  Note
+/// that you must provide such implementation even for the reflexive/no-op case, which will
+/// almost always be desirable.
+pub trait LookupKey<C: Comparator> {
+    /// Returns a reference to the comparison key type.
+    fn key(&self) -> &C::Key;
+}
+
+impl<K, T> LookupKey<OrdComparator<T>> for K
+where
+    K: ?Sized + core::borrow::Borrow<T>,
+    T: ?Sized + Ord,
+{
+    fn key(&self) -> &T {
+        core::borrow::Borrow::borrow(self)
+    }
+}
+
+/// A helper trait implemented on potential storage key types, used to identify their default
+/// comparison type for `Ord`-based comparisons.
+///
+/// This is only really used when collections are left to select the default [`OrdComparator`]
+/// comparator, which essentially converts copse's collections into those already provided by
+/// the standard library.  This trait is therefore a convenience, but of relatively little value.
+///
+/// For example, a collection that stores `String` under the default comparator will use `str`
+/// as the comparison type owing to the implementation of this trait for `String`.
+pub trait OrdStoredKey: LookupKey<OrdComparator<Self::DefaultComparisonKey>> {
+    /// The comparison type to be used by collections storing keys of `Self` type and using the
+    /// default [`OrdComparator`] comparator.
+    type DefaultComparisonKey: ?Sized + Ord;
+}
+
+macro_rules! ord_keys {
     // end of recursion
     () => {};
 
     // implement type and recurse
     ($(#[$attrs:meta])* $({$($g:tt)+})? $t:ty => $m:ty $(, $($rest:tt)*)?) => {
         $(#[$attrs])*
-        impl$(<$($g)+>)? Sortable for $t {
-            type State = $m;
+        impl$(<$($g)+>)? OrdStoredKey for $t {
+            type DefaultComparisonKey = $m;
         }
 
-        $(minimals!($($rest)*);)?
+        $(ord_keys!($($rest)*);)?
     };
 
     // delegate to a reflexive implementation if no State is specified
     ($(#[$attrs:meta])* $({$($g:tt)+})? $t:ty $(, $($rest:tt)*)?) => {
-        minimals!($(#[$attrs])* $({$($g)+})? $t => Self $(, $($rest)*)?);
+        ord_keys!($(#[$attrs])* $({$($g)+})? $t => Self $(, $($rest)*)?);
     };
 }
 
-minimals! {
+ord_keys! {
     (),
     bool, char,
-    f32, f64,
+    // f32, f64,
     i8, u8,
     i16, u16,
     i32, u32,
@@ -218,26 +234,26 @@ minimals! {
     isize, usize,
     alloc::string::String => str,
     alloc::ffi::CString => core::ffi::CStr,
-    {B: ?Sized + Clone} alloc::borrow::Cow<'_, B> => B,
-    {T: ?Sized} &T => T,
-    {T: ?Sized} &mut T => T,
-    {T: ?Sized} alloc::rc::Rc<T> => T,
-    {T: ?Sized} alloc::sync::Arc<T> => T,
-    {T, const N: usize} [T; N] => [T],
+    {B: ?Sized + Ord + Clone} alloc::borrow::Cow<'_, B> => B,
+    {T: ?Sized + Ord} &T => T,
+    {T: ?Sized + Ord} &mut T => T,
+    {T: ?Sized + Ord} alloc::rc::Rc<T> => T,
+    {T: ?Sized + Ord} alloc::sync::Arc<T> => T,
+    {T: Ord, const N: usize} [T; N] => [T],
     #[cfg(feature = "std")] std::ffi::OsString => std::ffi::OsStr,
     #[cfg(feature = "std")] std::path::PathBuf => std::path::Path,
 }
 
 cfg_if! {
     if #[cfg(feature = "allocator_api")] {
-        minimals! {
-            {T, A: alloc::alloc::Allocator} alloc::vec::Vec<T, A> => [T],
-            {T: ?Sized, A: alloc::alloc::Allocator} alloc::boxed::Box<T, A> => T,
+        ord_keys! {
+            {T: Ord, A: alloc::alloc::Allocator} alloc::vec::Vec<T, A> => [T],
+            {T: Ord + ?Sized, A: alloc::alloc::Allocator} alloc::boxed::Box<T, A> => T,
         }
     } else {
-        minimals! {
-            {T} alloc::vec::Vec<T> => [T],
-            {T: ?Sized} alloc::boxed::Box<T> => T,
+        ord_keys! {
+            {T: Ord} alloc::vec::Vec<T> => [T],
+            {T: Ord + ?Sized} alloc::boxed::Box<T> => T,
         }
     }
 }
