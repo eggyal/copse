@@ -1,0 +1,13 @@
+[package]
+name = "copse"
+version = "0.3.0"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/eggyal/copse.git"
+description = "Direct ports of the standard library's B-Tree collections, but that sort according to a specified comparator rather than the `Ord` trait"
+edition = "2021"
+keywords = ["b-tree", "collections", "map", "set", "runtime"]
+categories = ["data-structures", "no-std"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
