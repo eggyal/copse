@@ -18,6 +18,7 @@ exact_size_is_empty = []
 exclusive_range_pattern = []
 extend_one = []
 hasher_prefixfree_extras = []
+inline_const = []
 maybe_uninit_slice = []
 new_uninit = []
 rustc_attrs = []
@@ -33,6 +34,7 @@ nightly = [
     "exclusive_range_pattern",
     "extend_one",
     "hasher_prefixfree_extras",
+    "inline_const",
     "maybe_uninit_slice",
     "new_uninit",
     "rustc_attrs",
