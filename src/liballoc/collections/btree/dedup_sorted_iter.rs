@@ -45,7 +45,7 @@ where
                 None => return Some(next),
             };
 
-            if self.comparator.cmp(next.0.key(), peeked.0.key()).is_ne() {
+            if self.comparator.ne(next.0.key(), peeked.0.key()) {
                 return Some(next);
             }
         }

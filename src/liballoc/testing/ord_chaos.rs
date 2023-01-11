@@ -34,7 +34,7 @@ impl Ord for Cyclic3 {
 
 impl PartialEq for Cyclic3 {
     fn eq(&self, other: &Self) -> bool {
-        self.cmp(other) == Equal
+        self.cmp(&other) == Equal
     }
 }
 

@@ -88,7 +88,6 @@
 
 #![cfg_attr(not(any(feature = "std", test)), no_std)]
 #![cfg_attr(feature = "allocator_api", feature(allocator_api))]
-#![cfg_attr(feature = "bound_map", feature(bound_map))]
 #![cfg_attr(feature = "core_intrinsics", feature(core_intrinsics))]
 #![cfg_attr(feature = "dropck_eyepatch", feature(dropck_eyepatch))]
 #![cfg_attr(feature = "error_in_core", feature(error_in_core))]
@@ -96,7 +95,6 @@
 #![cfg_attr(feature = "exclusive_range_pattern", feature(exclusive_range_pattern))]
 #![cfg_attr(feature = "extend_one", feature(extend_one))]
 #![cfg_attr(feature = "hasher_prefixfree_extras", feature(hasher_prefixfree_extras))]
-#![cfg_attr(feature = "map_try_insert", feature(map_try_insert))]
 #![cfg_attr(feature = "maybe_uninit_slice", feature(maybe_uninit_slice))]
 #![cfg_attr(feature = "new_uninit", feature(new_uninit))]
 #![cfg_attr(feature = "rustc_attrs", feature(rustc_attrs))]
@@ -106,21 +104,19 @@
 #![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg))]
 #![deny(missing_docs)]
 // linting controls
-#![allow(clippy::type_complexity)]
 #![cfg_attr(feature = "specialization", allow(incomplete_features))]
 
 extern crate alloc;
 
-use cfg_if::cfg_if;
+use alloc::{boxed::Box, vec::Vec};
 use core::{cmp::Ordering, marker::PhantomData};
 
 #[macro_use]
 mod polyfill;
 
 // port of stdlib implementation
-#[allow(missing_docs)]
-mod btree;
-pub use btree::{map, set};
+mod liballoc;
+pub use liballoc::collections::{btree_map as map, btree_set as set};
 pub use map::BTreeMap;
 pub use set::BTreeSet;
 
@@ -134,6 +130,38 @@ pub trait Comparator {
     ///
     /// The comparison must satisfy both transitivity and duality.
     fn cmp(&self, this: &Self::Key, that: &Self::Key) -> Ordering;
+
+    /// Tests whether `this == that` under the total order defined by this
+    /// comparator.
+    fn eq(&self, this: &Self::Key, that: &Self::Key) -> bool {
+        self.cmp(this, that).is_eq()
+    }
+    /// Tests whether `this != that` under the total order defined by this
+    /// comparator.
+    fn ne(&self, this: &Self::Key, that: &Self::Key) -> bool {
+        self.cmp(this, that).is_ne()
+    }
+
+    /// Tests whether `this >= that` under the total order defined by this
+    /// comparator.
+    fn ge(&self, this: &Self::Key, that: &Self::Key) -> bool {
+        self.cmp(this, that).is_ge()
+    }
+    /// Tests whether `this > that` under the total order defined by this
+    /// comparator.
+    fn gt(&self, this: &Self::Key, that: &Self::Key) -> bool {
+        self.cmp(this, that).is_gt()
+    }
+    /// Tests whether `this <= that` under the total order defined by this
+    /// comparator.
+    fn le(&self, this: &Self::Key, that: &Self::Key) -> bool {
+        self.cmp(this, that).is_le()
+    }
+    /// Tests whether `this < that` under the total order defined by this
+    /// comparator.
+    fn lt(&self, this: &Self::Key, that: &Self::Key) -> bool {
+        self.cmp(this, that).is_lt()
+    }
 }
 
 /// A zero-sized comparator that delegates to the [`Ord`] implementation
@@ -158,6 +186,26 @@ impl<T: ?Sized + Ord> Comparator for OrdComparator<T> {
     type Key = T;
     fn cmp(&self, this: &T, that: &T) -> Ordering {
         this.cmp(that)
+    }
+
+    fn eq(&self, this: &Self::Key, that: &Self::Key) -> bool {
+        this.eq(that)
+    }
+    fn ne(&self, this: &Self::Key, that: &Self::Key) -> bool {
+        this.ne(that)
+    }
+
+    fn ge(&self, this: &Self::Key, that: &Self::Key) -> bool {
+        this.ge(that)
+    }
+    fn gt(&self, this: &Self::Key, that: &Self::Key) -> bool {
+        this.gt(that)
+    }
+    fn le(&self, this: &Self::Key, that: &Self::Key) -> bool {
+        this.le(that)
+    }
+    fn lt(&self, this: &Self::Key, that: &Self::Key) -> bool {
+        this.lt(that)
     }
 }
 
@@ -222,7 +270,6 @@ macro_rules! ord_keys {
 ord_keys! {
     (),
     bool, char,
-    // f32, f64,
     i8, u8,
     i16, u16,
     i32, u32,
@@ -239,18 +286,6 @@ ord_keys! {
     {T: Ord, const N: usize} [T; N] => [T],
     #[cfg(feature = "std")] std::ffi::OsString => std::ffi::OsStr,
     #[cfg(feature = "std")] std::path::PathBuf => std::path::Path,
-}
-
-cfg_if! {
-    if #[cfg(feature = "allocator_api")] {
-        ord_keys! {
-            {T: Ord, A: alloc::alloc::Allocator} alloc::vec::Vec<T, A> => [T],
-            {T: Ord + ?Sized, A: alloc::alloc::Allocator} alloc::boxed::Box<T, A> => T,
-        }
-    } else {
-        ord_keys! {
-            {T: Ord} alloc::vec::Vec<T> => [T],
-            {T: Ord + ?Sized} alloc::boxed::Box<T> => T,
-        }
-    }
+    {T: Ord, #[cfg(feature = "allocator_api")] A: alloc::alloc::Allocator} A!(Vec<T, A>) => [T],
+    {T: Ord + ?Sized, #[cfg(feature = "allocator_api")] A: alloc::alloc::Allocator} A!(Box<T, A>) => T,
 }

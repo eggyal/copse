@@ -79,8 +79,7 @@ impl<K, V> LeafNode<K, V> {
     }
 
     /// Creates a new boxed `LeafNode`.
-    fn new<A: Allocator + Clone>(alloc: A) -> Box!(Self, A) {
-        #[allow(unstable_name_collisions)]
+    fn new<A: Allocator + Clone>(alloc: A) -> A!(Box<Self, A>) {
         unsafe {
             let mut leaf = Box::new_uninit_in(alloc);
             LeafNode::init(leaf.as_mut_ptr());
@@ -112,10 +111,9 @@ impl<K, V> InternalNode<K, V> {
     /// An invariant of internal nodes is that they have at least one
     /// initialized and valid edge. This function does not set up
     /// such an edge.
-    unsafe fn new<A: Allocator + Clone>(alloc: A) -> Box!(Self, A) {
-        #[allow(unstable_name_collisions)]
+    unsafe fn new<A: Allocator + Clone>(alloc: A) -> A!(Box<Self, A>) {
         unsafe {
-            let mut node = <Box!(Self, _)>::new_uninit_in(alloc);
+            let mut node = <A!(Box<Self, _>)>::new_uninit_in(alloc);
             // We only need to initialize the data; the edges are MaybeUninit.
             LeafNode::init(ptr::addr_of_mut!((*node.as_mut_ptr()).data));
             node.assume_init()
@@ -220,7 +218,7 @@ impl<K, V> NodeRef<marker::Owned, K, V, marker::Leaf> {
         Self::from_new_leaf::<A>(LeafNode::new(alloc))
     }
 
-    fn from_new_leaf<A: Allocator + Clone>(leaf: Box!(LeafNode<K, V>, A)) -> Self {
+    fn from_new_leaf<A: Allocator + Clone>(leaf: A!(Box<LeafNode<K, V>, A>)) -> Self {
         NodeRef { height: 0, node: NonNull::from(Box::leak(leaf)), _marker: PhantomData }
     }
 }
@@ -235,7 +233,7 @@ impl<K, V> NodeRef<marker::Owned, K, V, marker::Internal> {
     /// # Safety
     /// `height` must not be zero.
     unsafe fn from_new_internal<A: Allocator + Clone>(
-        internal: Box!(InternalNode<K, V>, A),
+        internal: A!(Box<InternalNode<K, V>, A>),
         height: usize,
     ) -> Self {
         debug_assert!(height > 0);
@@ -321,7 +319,6 @@ impl<BorrowType: marker::BorrowType, K, V, Type> NodeRef<BorrowType, K, V, Type>
     pub fn ascend(
         self,
     ) -> Result<Handle<NodeRef<BorrowType, K, V, marker::Internal>, marker::Edge>, Self> {
-        #[allow(clippy::let_unit_value)]
         let _ = BorrowType::TRAVERSAL_PERMIT;
         // We need to use raw pointers to nodes because, if BorrowType is marker::ValMut,
         // there might be outstanding mutable references to values that we must not invalidate.
@@ -385,10 +382,7 @@ impl<'a, K: 'a, V: 'a, Type> NodeRef<marker::Immut<'a>, K, V, Type> {
     pub fn keys(&self) -> &[K] {
         let leaf = self.into_leaf();
         unsafe {
-            let slice = leaf.keys.get_unchecked(..usize::from(leaf.len));
-
-            #[allow(unstable_name_collisions)]
-            MaybeUninit::slice_assume_init_ref(slice)
+            MaybeUninit::slice_assume_init_ref(leaf.keys.get_unchecked(..usize::from(leaf.len)))
         }
     }
 }
@@ -441,8 +435,8 @@ impl<'a, K, V, Type> NodeRef<marker::Mut<'a>, K, V, Type> {
     }
 
     /// Offers exclusive access to the leaf portion of a leaf or internal node.
-    fn into_leaf_mut(self) -> &'a mut LeafNode<K, V> {
-        let ptr = Self::as_leaf_ptr(&self);
+    fn into_leaf_mut(mut self) -> &'a mut LeafNode<K, V> {
+        let ptr = Self::as_leaf_ptr(&mut self);
         // SAFETY: we have exclusive access to the entire node.
         unsafe { &mut *ptr }
     }
@@ -506,21 +500,18 @@ impl<'a, K: 'a, V: 'a> NodeRef<marker::Mut<'a>, K, V, marker::Internal> {
 impl<'a, K, V, Type> NodeRef<marker::ValMut<'a>, K, V, Type> {
     /// # Safety
     /// - The node has more than `idx` initialized elements.
-    #[allow(clippy::needless_borrow, clippy::borrow_deref_ref, unstable_name_collisions)]
-    unsafe fn into_key_val_mut_at(self, idx: usize) -> (&'a K, &'a mut V) {
+    unsafe fn into_key_val_mut_at(mut self, idx: usize) -> (&'a K, &'a mut V) {
         // We only create a reference to the one element we are interested in,
         // to avoid aliasing with outstanding references to other elements,
         // in particular, those returned to the caller in earlier iterations.
-        let leaf = Self::as_leaf_ptr(&self);
+        let leaf = Self::as_leaf_ptr(&mut self);
         let keys = unsafe { ptr::addr_of!((*leaf).keys) };
         let vals = unsafe { ptr::addr_of_mut!((*leaf).vals) };
         // We must coerce to unsized array pointers because of Rust issue #74679.
         let keys: *const [_] = keys;
         let vals: *mut [_] = vals;
-
         let key = unsafe { (&*keys.get_unchecked(idx)).assume_init_ref() };
         let val = unsafe { (&mut *vals.get_unchecked_mut(idx)).assume_init_mut() };
-
         (key, val)
     }
 }
@@ -846,11 +837,14 @@ pub enum LeftOrRight<T> {
 fn splitpoint(edge_idx: usize) -> (usize, LeftOrRight<usize>) {
     debug_assert!(edge_idx <= CAPACITY);
 
+    #[cfg(not(feature = "exclusive_range_pattern"))]
     const EDGE_IDX_LEFT_OF_LEFT_OF_CENTER: usize = EDGE_IDX_LEFT_OF_CENTER - 1;
-
     // Rust issue #74834 tries to explain these symmetric rules.
     match edge_idx {
+        #[cfg(not(feature = "exclusive_range_pattern"))]
         0..=EDGE_IDX_LEFT_OF_LEFT_OF_CENTER => (KV_IDX_CENTER - 1, LeftOrRight::Left(edge_idx)),
+        #[cfg(feature = "exclusive_range_pattern")]
+        0..EDGE_IDX_LEFT_OF_CENTER => (KV_IDX_CENTER - 1, LeftOrRight::Left(edge_idx)),
         EDGE_IDX_LEFT_OF_CENTER => (KV_IDX_CENTER, LeftOrRight::Left(edge_idx)),
         EDGE_IDX_RIGHT_OF_CENTER => (KV_IDX_CENTER, LeftOrRight::Right(0)),
         _ => (KV_IDX_CENTER + 1, LeftOrRight::Right(edge_idx - (KV_IDX_CENTER + 1 + 1))),
@@ -1016,7 +1010,6 @@ impl<BorrowType: marker::BorrowType, K, V>
     /// `edge.descend().ascend().unwrap()` and `node.ascend().unwrap().descend()` should
     /// both, upon success, do nothing.
     pub fn descend(self) -> NodeRef<BorrowType, K, V, marker::LeafOrInternal> {
-        #[allow(clippy::let_unit_value)]
         let _ = BorrowType::TRAVERSAL_PERMIT;
         // We need to use raw pointers to nodes because, if BorrowType is
         // marker::ValMut, there might be outstanding mutable references to
@@ -1318,7 +1311,7 @@ impl<'a, K: 'a, V: 'a> BalancingContext<'a, K, V> {
                 left_node.val_area_mut(old_left_len + 1..new_left_len),
             );
 
-            slice_remove(parent_node.edge_area_mut(..old_parent_len + 1), parent_idx + 1);
+            slice_remove(&mut parent_node.edge_area_mut(..old_parent_len + 1), parent_idx + 1);
             parent_node.correct_childrens_parent_links(parent_idx + 1..old_parent_len);
             *parent_node.len_mut() -= 1;
 

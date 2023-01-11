@@ -1,7 +1,6 @@
+use crate::{Comparator, LookupKey};
 use core::cmp::Ordering;
 use core::ops::{Bound, RangeBounds};
-
-use crate::{Comparator, LookupKey};
 
 use super::node::{marker, ForceResult::*, Handle, NodeRef};
 
@@ -111,9 +110,7 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
         // remain the same, but an adversarial implementation could change between calls (#81138).
         let (start, end) = (range.start_bound(), range.end_bound());
         match (start, end) {
-            (Bound::Excluded(s), Bound::Excluded(e))
-                if comparator.cmp(s.key(), e.key()).is_eq() =>
-            {
+            (Bound::Excluded(s), Bound::Excluded(e)) if comparator.eq(s.key(), e.key()) => {
                 cfg_if! {
                     if #[cfg(feature = "specialization")] {
                         if is_set {
@@ -127,7 +124,7 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
                 }
             }
             (Bound::Included(s) | Bound::Excluded(s), Bound::Included(e) | Bound::Excluded(e))
-                if comparator.cmp(s.key(), e.key()).is_gt() =>
+                if comparator.gt(s.key(), e.key()) =>
             {
                 cfg_if! {
                     if #[cfg(feature = "specialization")] {

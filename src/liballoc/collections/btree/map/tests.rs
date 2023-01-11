@@ -1,8 +1,8 @@
-use super::super::testing::crash_test::{CrashTestDummy, Panic};
-use super::super::testing::ord_chaos::{Cyclic3, Governed, Governor};
-use super::super::testing::rng::DeterministicRng;
 use super::Entry::{Occupied, Vacant};
 use super::*;
+use crate::liballoc::testing::crash_test::{CrashTestDummy, Panic};
+use crate::liballoc::testing::ord_chaos::{Cyclic3, Governed, Governor};
+use crate::liballoc::testing::rng::DeterministicRng;
 use alloc::boxed::Box;
 use alloc::fmt::Debug;
 use alloc::rc::Rc;
@@ -56,7 +56,7 @@ impl<K: OrdStoredKey, V> BTreeMap<K, V> {
             assert_eq!(self.length, root_node.calc_length());
 
             // Lastly, check the invariant causing the least harm.
-            root_node.assert_min_len(usize::from(root_node.height() > 0));
+            root_node.assert_min_len(if root_node.height() > 0 { 1 } else { 0 });
         } else {
             assert_eq!(self.length, 0);
         }
@@ -102,7 +102,7 @@ impl<K: OrdStoredKey, V> BTreeMap<K, V> {
         if let Some(mut previous) = keys.next() {
             for next in keys {
                 assert!(
-                    self.comparator.cmp(previous.key(), next.key()).is_lt(),
+                    self.comparator.lt(previous.key(), next.key()),
                     "{:?} >= {:?}",
                     previous.key(),
                     next.key()
@@ -117,20 +117,7 @@ impl<K: OrdStoredKey, V> BTreeMap<K, V> {
     // been obtained by inserting keys in a shrewd order.
     fn compact(&mut self) {
         let iter = mem::take(self).into_iter();
-
-        cfg_if! {
-            if #[cfg(feature = "exact_size_is_empty")] {
-                let non_empty = !iter.is_empty();
-            } else {
-                let (iter, non_empty) = {
-                    let mut iter = iter.peekable();
-                    let non_empty = iter.peek().is_some();
-                    (iter, non_empty)
-                };
-            }
-        }
-
-        if non_empty {
+        if !iter.is_empty() {
             self.root.insert(Root::new(*self.alloc)).bulk_push(iter, &mut self.length, *self.alloc);
         }
     }
@@ -393,8 +380,8 @@ fn test_iter_rev() {
 fn do_test_iter_mut_mutation<T>(size: usize)
 where
     T: Copy + OrdStoredKey + TryFrom<usize>,
-    <T as TryFrom<usize>>::Error: Debug,
     T::DefaultComparisonKey: Debug,
+    <T as TryFrom<usize>>::Error: Debug,
 {
     let zero = T::try_from(0).unwrap();
     let mut map = BTreeMap::from_iter((0..size).map(|i| (T::try_from(i).unwrap(), zero)));
@@ -479,7 +466,7 @@ fn test_values_mut_mutation() {
     a.insert(2, String::from("goodbye"));
 
     for value in a.values_mut() {
-        value.push('!');
+        value.push_str("!");
     }
 
     let values = Vec::from_iter(a.values().cloned());
@@ -1565,7 +1552,7 @@ fn test_clone() {
 
 fn test_clone_panic_leak(size: usize) {
     for i in 0..size {
-        let dummies = Vec::from_iter((0..size).map(CrashTestDummy::new));
+        let dummies = Vec::from_iter((0..size).map(|id| CrashTestDummy::new(id)));
         let map = BTreeMap::from_iter(dummies.iter().map(|dummy| {
             let panic = if dummy.id == i { Panic::InClone } else { Panic::Never };
             (dummy.spawn(panic), ())
@@ -1573,14 +1560,14 @@ fn test_clone_panic_leak(size: usize) {
 
         catch_unwind(|| map.clone()).unwrap_err();
         for d in &dummies {
-            assert_eq!(d.cloned(), usize::from(d.id <= i), "id={}/{}", d.id, i);
-            assert_eq!(d.dropped(), usize::from(d.id < i), "id={}/{}", d.id, i);
+            assert_eq!(d.cloned(), if d.id <= i { 1 } else { 0 }, "id={}/{}", d.id, i);
+            assert_eq!(d.dropped(), if d.id < i { 1 } else { 0 }, "id={}/{}", d.id, i);
         }
         assert_eq!(map.len(), size);
 
         drop(map);
         for d in &dummies {
-            assert_eq!(d.cloned(), usize::from(d.id <= i), "id={}/{}", d.id, i);
+            assert_eq!(d.cloned(), if d.id <= i { 1 } else { 0 }, "id={}/{}", d.id, i);
             assert_eq!(d.dropped(), if d.id < i { 2 } else { 1 }, "id={}/{}", d.id, i);
         }
     }
@@ -1829,7 +1816,6 @@ fn test_ord_absence() {
         let _ = map.keys();
         let _ = map.values();
         let _ = map.values_mut();
-        #[allow(clippy::ifs_same_cond)]
         if true {
             let _ = map.into_values();
         } else if true {
@@ -1846,7 +1832,6 @@ fn test_ord_absence() {
         format!("{:?}", map.keys());
         format!("{:?}", map.values());
         format!("{:?}", map.values_mut());
-        #[allow(clippy::ifs_same_cond)]
         if true {
             format!("{:?}", map.into_iter());
         } else if true {
@@ -1875,14 +1860,14 @@ fn test_occupied_entry_key() {
     assert_eq!(a.height(), None);
     a.insert(key, value);
     assert_eq!(a.len(), 1);
-    assert_eq!(a[&key], value);
+    assert_eq!(a[key], value);
 
     match a.entry(key) {
         Vacant(_) => panic!(),
         Occupied(e) => assert_eq!(key, *e.key()),
     }
     assert_eq!(a.len(), 1);
-    assert_eq!(a[&key], value);
+    assert_eq!(a[key], value);
     a.check();
 }
 
@@ -1901,7 +1886,7 @@ fn test_vacant_entry_key() {
         }
     }
     assert_eq!(a.len(), 1);
-    assert_eq!(a[&key], value);
+    assert_eq!(a[key], value);
     a.check();
 }
 
@@ -2225,7 +2210,7 @@ fn test_split_off_empty_left() {
 #[test]
 fn test_split_off_tiny_left_height_2() {
     let pairs = (0..MIN_INSERTS_HEIGHT_2).map(|i| (i, i));
-    let mut left = BTreeMap::from_iter(pairs);
+    let mut left = BTreeMap::from_iter(pairs.clone());
     let right = left.split_off(&1);
     left.check();
     right.check();
@@ -2241,7 +2226,7 @@ fn test_split_off_tiny_left_height_2() {
 fn test_split_off_tiny_right_height_2() {
     let pairs = (0..MIN_INSERTS_HEIGHT_2).map(|i| (i, i));
     let last = MIN_INSERTS_HEIGHT_2 - 1;
-    let mut left = BTreeMap::from_iter(pairs);
+    let mut left = BTreeMap::from_iter(pairs.clone());
     assert_eq!(*left.last_key_value().unwrap().0, last);
     let right = left.split_off(&last);
     left.check();
@@ -2314,15 +2299,15 @@ fn test_into_iter_drop_leak_height_0() {
 #[test]
 fn test_into_iter_drop_leak_height_1() {
     let size = MIN_INSERTS_HEIGHT_1;
-    for panic_point in [0, 1, size - 2, size - 1] {
-        let dummies = Vec::from_iter((0..size).map(CrashTestDummy::new));
+    for panic_point in vec![0, 1, size - 2, size - 1] {
+        let dummies = Vec::from_iter((0..size).map(|i| CrashTestDummy::new(i)));
         let map = BTreeMap::from_iter((0..size).map(|i| {
             let panic = if i == panic_point { Panic::InDrop } else { Panic::Never };
             (dummies[i].spawn(Panic::Never), dummies[i].spawn(panic))
         }));
         catch_unwind(move || drop(map.into_iter())).unwrap_err();
-        for dummy in dummies {
-            assert_eq!(dummy.dropped(), 2);
+        for i in 0..size {
+            assert_eq!(dummies[i].dropped(), 2);
         }
     }
 }

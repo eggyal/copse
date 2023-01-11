@@ -51,9 +51,9 @@ impl<I: Iterator> MergeIterInner<I> {
     /// the sources are not strictly ascending). If neither returned option
     /// contains a value, iteration has finished and subsequent calls will
     /// return the same empty pair.
-    pub fn nexts(
+    pub fn nexts<Cmp: Fn(&I::Item, &I::Item) -> Ordering>(
         &mut self,
-        comparator: impl Fn(&I::Item, &I::Item) -> Ordering,
+        cmp: Cmp,
     ) -> (Option<I::Item>, Option<I::Item>)
     where
         I: FusedIterator,
@@ -74,8 +74,8 @@ impl<I: Iterator> MergeIterInner<I> {
                 b_next = self.b.next();
             }
         }
-        if let (Some(a1), Some(b1)) = (&a_next, &b_next) {
-            match comparator(a1, b1) {
+        if let (Some(ref a1), Some(ref b1)) = (&a_next, &b_next) {
+            match cmp(a1, b1) {
                 Ordering::Less => self.peeked = b_next.take().map(Peeked::B),
                 Ordering::Greater => self.peeked = a_next.take().map(Peeked::A),
                 Ordering::Equal => (),
