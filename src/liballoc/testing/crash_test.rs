@@ -1,9 +1,8 @@
-// We avoid relying on anything else in the crate, apart from the `Debug` trait.
+// We avoid relying on anything else in the crate, apart from the `Debug` and `OrdStoredKey` traits.
+use crate::OrdStoredKey;
 use alloc::fmt::Debug;
 use std::cmp::Ordering;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
-
-use crate::OrdStoredKey;
 
 /// A blueprint for crash test dummy instances that monitor particular events.
 /// Some instances may be configured to panic at some point.

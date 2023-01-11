@@ -9,25 +9,7 @@ keywords = ["b-tree", "collections", "map", "set", "runtime"]
 categories = ["data-structures", "no-std"]
 
 [features]
-unstable = [
-    "allocator_api",
-    "bound_map",
-    "core_intrinsics",
-    "dropck_eyepatch",
-    "error_in_core",
-    "exact_size_is_empty",
-    "exclusive_range_pattern",
-    "extend_one",
-    "hasher_prefixfree_extras",
-    "map_try_insert",
-    "maybe_uninit_slice",
-    "new_uninit",
-    "rustc_attrs",
-    "slice_ptr_get",
-    "specialization",
-]
 allocator_api = []
-bound_map = []
 core_intrinsics = []
 dropck_eyepatch = []
 error_in_core = []
@@ -35,13 +17,33 @@ exact_size_is_empty = []
 exclusive_range_pattern = []
 extend_one = []
 hasher_prefixfree_extras = []
-map_try_insert = []
 maybe_uninit_slice = []
 new_uninit = []
 rustc_attrs = []
 slice_ptr_get = []
 specialization = []
+unstable = [
+    "allocator_api",
+    "core_intrinsics",
+    "dropck_eyepatch",
+    "error_in_core",
+    "exact_size_is_empty",
+    "exclusive_range_pattern",
+    "extend_one",
+    "hasher_prefixfree_extras",
+    "maybe_uninit_slice",
+    "new_uninit",
+    "rustc_attrs",
+    "slice_ptr_get",
+    "specialization",
+]
+
+
 std = []
+
+# unused but retained for backward-compat
+bound_map = []
+map_try_insert = []
 
 [dependencies]
 cfg-if = "1.0.0"

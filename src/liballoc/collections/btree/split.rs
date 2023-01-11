@@ -1,8 +1,7 @@
-use crate::{Comparator, LookupKey};
-
 use super::node::{ForceResult::*, Root};
 use super::search::SearchResult::*;
 use crate::polyfill::*;
+use crate::{Comparator, LookupKey};
 
 impl<K, V> Root<K, V> {
     /// Calculates the length of both trees that result from splitting up

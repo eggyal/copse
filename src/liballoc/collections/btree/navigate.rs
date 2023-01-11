@@ -1,8 +1,7 @@
+use crate::{Comparator, LookupKey};
 use core::hint;
 use core::ops::RangeBounds;
 use core::ptr;
-
-use crate::{Comparator, LookupKey};
 
 use super::node::{marker, ForceResult::*, Handle, NodeRef};
 
@@ -15,11 +14,9 @@ pub struct LeafRange<BorrowType, K, V> {
 
 impl<'a, K: 'a, V: 'a> Clone for LeafRange<marker::Immut<'a>, K, V> {
     fn clone(&self) -> Self {
-        *self
+        LeafRange { front: self.front.clone(), back: self.back.clone() }
     }
 }
-
-impl<'a, K: 'a, V: 'a> Copy for LeafRange<marker::Immut<'a>, K, V> {}
 
 impl<BorrowType, K, V> LeafRange<BorrowType, K, V> {
     pub fn none() -> Self {
@@ -252,14 +249,14 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
     /// # Safety
     /// Unless `BorrowType` is `Immut`, do not use the handles to visit the same
     /// KV twice.
-    unsafe fn find_leaf_edges_spanning_range<Q, R, C>(
+    unsafe fn find_leaf_edges_spanning_range<Q: ?Sized, R, C>(
         self,
         comparator: &C,
         range: R,
     ) -> LeafRange<BorrowType, K, V>
     where
         K: LookupKey<C>,
-        Q: ?Sized + LookupKey<C>,
+        Q: LookupKey<C>,
         R: RangeBounds<Q>,
         C: Comparator,
     {

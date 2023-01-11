@@ -330,7 +330,6 @@ impl<'a, K, V, C, A: Allocator + Clone> VacantEntry<'a, K, V, C, A> {
                     val_ptr
                 }
                 (Some(ins), val_ptr) => {
-                    #[allow(clippy::drop_non_drop)]
                     drop(ins.left);
                     // SAFETY: We have consumed self.handle and dropped the
                     // remaining reference to the tree, ins.left.

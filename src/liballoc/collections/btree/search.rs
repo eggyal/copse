@@ -1,7 +1,6 @@
+use crate::{Comparator, LookupKey};
 use core::cmp::Ordering;
 use core::ops::{Bound, RangeBounds};
-
-use crate::{Comparator, LookupKey};
 
 use super::node::{marker, ForceResult::*, Handle, NodeRef};
 

@@ -1,6 +1,6 @@
-use super::super::testing::crash_test::{CrashTestDummy, Panic};
-use super::super::testing::rng::DeterministicRng;
 use super::*;
+use crate::liballoc::testing::crash_test::{CrashTestDummy, Panic};
+use crate::liballoc::testing::rng::DeterministicRng;
 use alloc::vec::Vec;
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
@@ -291,20 +291,20 @@ fn test_is_subset() {
         set_a.is_subset(&set_b)
     }
 
-    assert!(is_subset(&[], &[]));
-    assert!(is_subset(&[], &[1, 2]));
-    assert!(!is_subset(&[0], &[1, 2]));
-    assert!(is_subset(&[1], &[1, 2]));
-    assert!(is_subset(&[2], &[1, 2]));
-    assert!(!is_subset(&[3], &[1, 2]));
-    assert!(!is_subset(&[1, 2], &[1]));
-    assert!(is_subset(&[1, 2], &[1, 2]));
-    assert!(!is_subset(&[1, 2], &[2, 3]));
-    assert!(is_subset(
-        &[-5, 11, 22, 33, 40, 42],
-        &[-12, -5, 11, 14, 22, 23, 33, 34, 38, 39, 40, 42]
-    ));
-    assert!(!is_subset(&[-5, 11, 22, 33, 40, 42], &[-12, -5, 11, 14, 22, 23, 34, 38]));
+    assert_eq!(is_subset(&[], &[]), true);
+    assert_eq!(is_subset(&[], &[1, 2]), true);
+    assert_eq!(is_subset(&[0], &[1, 2]), false);
+    assert_eq!(is_subset(&[1], &[1, 2]), true);
+    assert_eq!(is_subset(&[2], &[1, 2]), true);
+    assert_eq!(is_subset(&[3], &[1, 2]), false);
+    assert_eq!(is_subset(&[1, 2], &[1]), false);
+    assert_eq!(is_subset(&[1, 2], &[1, 2]), true);
+    assert_eq!(is_subset(&[1, 2], &[2, 3]), false);
+    assert_eq!(
+        is_subset(&[-5, 11, 22, 33, 40, 42], &[-12, -5, 11, 14, 22, 23, 33, 34, 38, 39, 40, 42]),
+        true
+    );
+    assert_eq!(is_subset(&[-5, 11, 22, 33, 40, 42], &[-12, -5, 11, 14, 22, 23, 34, 38]), false);
 
     if cfg!(miri) {
         // Miri is too slow
@@ -312,12 +312,12 @@ fn test_is_subset() {
     }
 
     let large = Vec::from_iter(0..100);
-    assert!(is_subset(&[], &large));
-    assert!(!is_subset(&large, &[]));
-    assert!(!is_subset(&[-1], &large));
-    assert!(is_subset(&[0], &large));
-    assert!(is_subset(&[1, 2], &large));
-    assert!(!is_subset(&[99, 100], &large));
+    assert_eq!(is_subset(&[], &large), true);
+    assert_eq!(is_subset(&large, &[]), false);
+    assert_eq!(is_subset(&[-1], &large), false);
+    assert_eq!(is_subset(&[0], &large), true);
+    assert_eq!(is_subset(&[1, 2], &large), true);
+    assert_eq!(is_subset(&[99, 100], &large), false);
 }
 
 #[test]
@@ -328,16 +328,16 @@ fn test_is_superset() {
         set_a.is_superset(&set_b)
     }
 
-    assert!(is_superset(&[], &[]));
-    assert!(!is_superset(&[], &[1, 2]));
-    assert!(!is_superset(&[0], &[1, 2]));
-    assert!(!is_superset(&[1], &[1, 2]));
-    assert!(!is_superset(&[4], &[1, 2]));
-    assert!(!is_superset(&[1, 4], &[1, 2]));
-    assert!(is_superset(&[1, 2], &[1, 2]));
-    assert!(is_superset(&[1, 2, 3], &[1, 3]));
-    assert!(is_superset(&[1, 2, 3], &[]));
-    assert!(is_superset(&[-1, 1, 2, 3], &[-1, 3]));
+    assert_eq!(is_superset(&[], &[]), true);
+    assert_eq!(is_superset(&[], &[1, 2]), false);
+    assert_eq!(is_superset(&[0], &[1, 2]), false);
+    assert_eq!(is_superset(&[1], &[1, 2]), false);
+    assert_eq!(is_superset(&[4], &[1, 2]), false);
+    assert_eq!(is_superset(&[1, 4], &[1, 2]), false);
+    assert_eq!(is_superset(&[1, 2], &[1, 2]), true);
+    assert_eq!(is_superset(&[1, 2, 3], &[1, 3]), true);
+    assert_eq!(is_superset(&[1, 2, 3], &[]), true);
+    assert_eq!(is_superset(&[-1, 1, 2, 3], &[-1, 3]), true);
 
     if cfg!(miri) {
         // Miri is too slow
@@ -345,15 +345,15 @@ fn test_is_superset() {
     }
 
     let large = Vec::from_iter(0..100);
-    assert!(!is_superset(&[], &large));
-    assert!(is_superset(&large, &[]));
-    assert!(is_superset(&large, &[1]));
-    assert!(is_superset(&large, &[50, 99]));
-    assert!(!is_superset(&large, &[100]));
-    assert!(is_superset(&large, &[0, 99]));
-    assert!(!is_superset(&[-1], &large));
-    assert!(!is_superset(&[0], &large));
-    assert!(!is_superset(&[99, 100], &large));
+    assert_eq!(is_superset(&[], &large), false);
+    assert_eq!(is_superset(&large, &[]), true);
+    assert_eq!(is_superset(&large, &[1]), true);
+    assert_eq!(is_superset(&large, &[50, 99]), true);
+    assert_eq!(is_superset(&large, &[100]), false);
+    assert_eq!(is_superset(&large, &[0, 99]), true);
+    assert_eq!(is_superset(&[-1], &large), false);
+    assert_eq!(is_superset(&[0], &large), false);
+    assert_eq!(is_superset(&[99, 100], &large), false);
 }
 
 #[test]
@@ -438,14 +438,14 @@ fn test_remove() {
     x.insert(3);
     x.insert(4);
 
-    assert!(x.remove(&2));
-    assert!(!x.remove(&0));
-    assert!(!x.remove(&5));
-    assert!(x.remove(&1));
-    assert!(!x.remove(&2));
-    assert!(x.remove(&3));
-    assert!(x.remove(&4));
-    assert!(!x.remove(&4));
+    assert_eq!(x.remove(&2), true);
+    assert_eq!(x.remove(&0), false);
+    assert_eq!(x.remove(&5), false);
+    assert_eq!(x.remove(&1), true);
+    assert_eq!(x.remove(&2), false);
+    assert_eq!(x.remove(&3), true);
+    assert_eq!(x.remove(&4), true);
+    assert_eq!(x.remove(&4), false);
     assert!(x.is_empty());
 }
 
@@ -476,7 +476,7 @@ fn test_from_iter() {
     let set = BTreeSet::<_, OrdComparator<i32>>::from_iter(xs.iter());
 
     for x in &xs {
-        assert!(set.contains(&x));
+        assert!(set.contains(x));
     }
 }
 
@@ -499,7 +499,7 @@ fn test_extend_ref() {
     let mut a = BTreeSet::default();
     a.insert(1);
 
-    a.extend([2, 3, 4]);
+    a.extend(&[2, 3, 4]);
 
     assert_eq!(a.len(), 4);
     assert!(a.contains(&1));
@@ -537,13 +537,13 @@ fn test_recovery() {
 
     impl PartialOrd for Foo {
         fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-            self.0.partial_cmp(other.0)
+            self.0.partial_cmp(&other.0)
         }
     }
 
     impl Ord for Foo {
         fn cmp(&self, other: &Self) -> Ordering {
-            self.0.cmp(other.0)
+            self.0.cmp(&other.0)
         }
     }
 
@@ -609,19 +609,19 @@ fn assert_sync() {
     }
 
     fn difference<T: Sync + Ord>(v: &BTreeSet<T>) -> impl Sync + '_ {
-        v.difference(v)
+        v.difference(&v)
     }
 
     fn intersection<T: Sync + Ord>(v: &BTreeSet<T>) -> impl Sync + '_ {
-        v.intersection(v)
+        v.intersection(&v)
     }
 
     fn symmetric_difference<T: Sync + Ord>(v: &BTreeSet<T>) -> impl Sync + '_ {
-        v.symmetric_difference(v)
+        v.symmetric_difference(&v)
     }
 
     fn union<T: Sync + Ord>(v: &BTreeSet<T>) -> impl Sync + '_ {
-        v.union(v)
+        v.union(&v)
     }
 }
 
@@ -648,19 +648,19 @@ fn assert_send() {
     }
 
     fn difference<T: Send + Sync + Ord>(v: &BTreeSet<T>) -> impl Send + '_ {
-        v.difference(v)
+        v.difference(&v)
     }
 
     fn intersection<T: Send + Sync + Ord>(v: &BTreeSet<T>) -> impl Send + '_ {
-        v.intersection(v)
+        v.intersection(&v)
     }
 
     fn symmetric_difference<T: Send + Sync + Ord>(v: &BTreeSet<T>) -> impl Send + '_ {
-        v.symmetric_difference(v)
+        v.symmetric_difference(&v)
     }
 
     fn union<T: Send + Sync + Ord>(v: &BTreeSet<T>) -> impl Send + '_ {
-        v.union(v)
+        v.union(&v)
     }
 }
 
@@ -691,7 +691,7 @@ fn assert_derives() {
         let _ = v.clamp(w, x);
     }
     fn partial_cmp<T: Ord>(v: &BTreeSet<T>) {
-        let _ = v.partial_cmp(v);
+        let _ = v.partial_cmp(&v);
     }
 }
 
@@ -739,11 +739,11 @@ fn test_append() {
     assert_eq!(a.len(), 5);
     assert_eq!(b.len(), 0);
 
-    assert!(a.contains(&1));
-    assert!(a.contains(&2));
-    assert!(a.contains(&3));
-    assert!(a.contains(&4));
-    assert!(a.contains(&5));
+    assert_eq!(a.contains(&1), true);
+    assert_eq!(a.contains(&2), true);
+    assert_eq!(a.contains(&3), true);
+    assert_eq!(a.contains(&4), true);
+    assert_eq!(a.contains(&5), true);
 }
 
 #[test]

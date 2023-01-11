@@ -3,6 +3,7 @@
 mod definitions {
     #[cfg(not(all(feature = "allocator_api", feature = "new_uninit")))]
     use alloc::alloc::Layout;
+    use alloc::boxed::Box;
     use cfg_if::cfg_if;
     use core::mem::MaybeUninit;
 
@@ -78,12 +79,14 @@ mod definitions {
 
     cfg_if! {
         if #[cfg(feature = "allocator_api")] {
-            macro_rules! Box {
-                ($t:ty$(, $a:ty)?) => { alloc::boxed::Box<$t$(, $a)?> };
+            macro_rules! A {
+                (Box<$t:ty$(, $a:ty)?>) => { Box<$t$(, $a)?> };
+                (Vec<$t:ty$(, $a:ty)?>) => { Vec<$t$(, $a)?> };
             }
         } else {
-            macro_rules! Box {
-                ($t:ty$(, $a:ty)?) => { alloc::boxed::Box<$t> };
+            macro_rules! A {
+                (Box<$t:ty$(, $a:ty)?>) => { Box<$t> };
+                (Vec<$t:ty$(, $a:ty)?>) => { Vec<$t> };
             }
         }
     }
@@ -102,25 +105,25 @@ mod definitions {
         unsafe fn assume_init(self) -> Self::SelfWithAlloc<T, A>;
     }
 
-    impl<T, A: Allocator> NewUninit<T, A> for Box!(T, A) {
-        type SelfWithAlloc<U: ?Sized, B: Allocator> = Box!(U, B);
+    impl<T, A: Allocator> NewUninit<T, A> for A!(Box<T, A>) {
+        type SelfWithAlloc<U: ?Sized, B: Allocator> = A!(Box<U, B>);
 
         #[cfg(not(feature = "allocator_api"))]
         #[inline]
-        unsafe fn from_raw_in(ptr: *mut T, _: A) -> Box!(T, Global) {
+        unsafe fn from_raw_in(ptr: *mut T, _: A) -> A!(Box<T, Global>) {
             Self::from_raw(ptr)
         }
 
         #[inline]
-        fn new_uninit_in(alloc: A) -> Box!(MaybeUninit<T>, A) {
+        fn new_uninit_in(alloc: A) -> A!(Box<MaybeUninit<T>, A>) {
             cfg_if! {
                 if #[cfg(all(feature = "allocator_api", feature = "new_uninit"))] {
-                    <Box!(_, _)>::new_uninit_in(alloc)
+                    <A!(Box<_, _>)>::new_uninit_in(alloc)
                 } else {
                     unsafe {
                         let layout = Layout::new::<MaybeUninit<T>>();
                         match alloc.allocate(layout) {
-                            Ok(ptr) => <Box!(_, _)>::from_raw_in(ptr.cast().as_ptr(), alloc),
+                            Ok(ptr) => <A!(Box<_, _>)>::from_raw_in(ptr.cast().as_ptr(), alloc),
                             Err(_) => alloc::alloc::handle_alloc_error(layout),
                         }
                     }
@@ -129,12 +132,12 @@ mod definitions {
         }
 
         #[inline]
-        fn new_uninit() -> Box!(MaybeUninit<T>) {
+        fn new_uninit() -> A!(Box<MaybeUninit<T>>) {
             cfg_if! {
                 if #[cfg(feature = "new_uninit")] {
-                    <Box!(_)>::new_uninit()
+                    <A!(Box<_>)>::new_uninit()
                 } else {
-                    <Box!(_)>::new_uninit_in(Global)
+                    <A!(Box<_>)>::new_uninit_in(Global)
                 }
             }
         }
@@ -143,19 +146,19 @@ mod definitions {
     #[cfg(not(feature = "new_uninit"))]
     cfg_if! {
         if #[cfg(feature = "allocator_api")] {
-            impl<T, A: Allocator> AssumeInit<T, A> for Box!(MaybeUninit<T>, A) {
+            impl<T, A: Allocator> AssumeInit<T, A> for A!(Box<MaybeUninit<T>, A>) {
                 #[inline]
-                unsafe fn assume_init(self) -> Box!(T, A) {
+                unsafe fn assume_init(self) -> A!(Box<T, A>) {
                     let (raw, alloc) = Self::into_raw_with_allocator(self);
-                    <Box!(_, _)>::from_raw_in(raw as *mut T, alloc)
+                    <A!(Box<_, _>)>::from_raw_in(raw as *mut T, alloc)
                 }
             }
         } else {
-            impl<T> AssumeInit<T, Global> for Box!(MaybeUninit<T>) {
+            impl<T> AssumeInit<T, Global> for A!(Box<MaybeUninit<T>>) {
                 #[inline]
-                unsafe fn assume_init(self) -> Box!(T) {
+                unsafe fn assume_init(self) -> A!(Box<T>) {
                     let raw = Self::into_raw(self);
-                    <Box!(_)>::from_raw(raw as *mut T)
+                    <A!(Box<_>)>::from_raw(raw as *mut T)
                 }
             }
         }
@@ -243,9 +246,82 @@ mod definitions {
             index.get_unchecked_mut(self)
         }
     }
+
+    pub trait ExactSizeIsEmpty: ExactSizeIterator {
+        fn is_empty(&self) -> bool {
+            self.len() == 0
+        }
+    }
+
+    #[cfg(not(feature = "exact_size_is_empty"))]
+    impl<I: ExactSizeIterator> ExactSizeIsEmpty for I {}
+
+    macro_rules! decorate_if {
+        (
+            $(#[$attr:meta])*
+            if #[cfg($vis_m:meta)] { $(#[$vis_attr:meta])* $vis:vis }
+            if #[cfg($const:meta)] { const }
+            $($rest:tt)+
+        ) => {
+            cfg_if::cfg_if! {
+                if #[cfg(all($vis_m, $const))] {
+                    $(#[$attr])*
+                    $(#[$vis_attr])*
+                    #[cfg_attr(docsrs, doc(cfg($vis_m)))]
+                    $vis const $($rest)+
+                } else if #[cfg($vis_m)] {
+                    $(#[$attr])*
+                    $(#[$vis_attr])*
+                    #[cfg_attr(docsrs, doc(cfg($vis_m)))]
+                    $vis $($rest)+
+                } else if #[cfg($const)] {
+                    $(#[$attr])*
+                    const $($rest)+
+                } else {
+                    $(#[$attr])*
+                    $($rest)+
+                }
+            }
+        };
+
+        (
+            $(#[$attr:meta])*
+            $vis:vis
+            if #[cfg($const:meta)] { const }
+            $($rest:tt)+
+        ) => {
+            cfg_if::cfg_if! {
+                if #[cfg($const)] {
+                    $(#[$attr])*
+                    $vis const $($rest)+
+                } else {
+                    $(#[$attr])*
+                    $vis $($rest)+
+                }
+            }
+        };
+
+        (
+            $(#[$attr:meta])*
+            if #[cfg($vis_m:meta)] { $(#[$vis_attr:meta])* $vis:vis }
+            $($rest:tt)+
+        ) => {
+            cfg_if::cfg_if! {
+                if #[cfg($vis_m)] {
+                    $(#[$attr])*
+                    $(#[$vis_attr])*
+                    #[cfg_attr(docsrs, doc(cfg($vis_m)))]
+                    $vis $($rest)+
+                } else {
+                    $(#[$attr])*
+                    $($rest)+
+                }
+            }
+        };
+    }
 }
 
 pub use definitions::{
-    intrinsics, Allocator, AssumeInit as _, Global, Hasher as _, MaybeUninitSlice as _,
-    NewUninit as _, SlicePtrGet as _, SlicePtrGetMut as _,
+    intrinsics, Allocator, AssumeInit as _, ExactSizeIsEmpty as _, Global, Hasher as _,
+    MaybeUninitSlice as _, NewUninit as _, SlicePtrGet as _, SlicePtrGetMut as _,
 };
