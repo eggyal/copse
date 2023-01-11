@@ -69,15 +69,20 @@
 //! * the `std` feature provides [`OrdStoredKey`] implementations for some libstd types
 //!   that are not available in libcore + liballoc, namely [`OsString`] and [`PathBuf`];
 //!
-//! * the `unstable` feature enables all other crate features, each of which enables the
+//! * the `unstable` feature enables all unstable features of the stdlib's BTree collection
+//!   implementations that are purely contained therein, and which therefore do not require
+//!   a nightly toolchain.
+//!
+//! * the `btreemap_alloc` feature enables the like-named unstable compiler feature, thus
+//!   exposing the collections' `new_in` methods; however this feature depends upon the
+//!   `allocator_api` unstable compiler feature that is only available with a nightly
+//!   toolchain.
+//!
+//! * the `nightly` feature enables all other crate features, each of which enables the
 //!   like-named unstable compiler feature that is used by the standard library's collection
 //!   implementations (and which therefore require a nightly compiler)—most such behaviour
 //!   is polyfilled when the features are disabled, so they should rarely be required, but
 //!   they are nevertheless included to ease tracking of the stdlib implementations.
-//!   
-//!   The most visible differences to library users will be:
-//!     * `allocator_api` enables the `new_in` methods for use of custom allocators; and
-//!     * `specialization` adds the collection type name to some panic messages.
 //!
 //! [`Borrow`]: std::borrow::Borrow
 //! [`Borrow<Q>`]: std::borrow::Borrow
@@ -117,7 +122,13 @@ mod polyfill;
 // port of stdlib implementation
 mod liballoc;
 pub use liballoc::collections::{btree_map as map, btree_set as set};
+
+#[cfg(not(no_global_oom_handling))]
+#[doc(no_inline)]
 pub use map::BTreeMap;
+
+#[cfg(not(no_global_oom_handling))]
+#[doc(no_inline)]
 pub use set::BTreeSet;
 
 /// A comparator defines a total order over its associated type `Key`.
