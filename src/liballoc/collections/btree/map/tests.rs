@@ -2062,6 +2062,7 @@ fn test_insert_into_full_height_1() {
 }
 
 #[test]
+#[cfg(feature = "map_try_insert")]
 fn test_try_insert() {
     let mut map = BTreeMap::default();
 

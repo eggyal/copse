@@ -75,6 +75,7 @@ impl<K: Debug, V: Debug, C, A: Allocator + Clone> Debug for OccupiedEntry<'_, K,
 /// The error returned by [`try_insert`](BTreeMap::try_insert) when the key already exists.
 ///
 /// Contains the occupied entry, and the value that was not inserted.
+#[cfg(feature = "map_try_insert")]
 pub struct OccupiedError<'a, K: 'a, V: 'a, C, A: Allocator + Clone = Global> {
     /// The entry in the map that was already occupied.
     pub entry: OccupiedEntry<'a, K, V, C, A>,
@@ -82,6 +83,7 @@ pub struct OccupiedError<'a, K: 'a, V: 'a, C, A: Allocator + Clone = Global> {
     pub value: V,
 }
 
+#[cfg(feature = "map_try_insert")]
 impl<K: Debug, V: Debug, C, A: Allocator + Clone> Debug for OccupiedError<'_, K, V, C, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("OccupiedError")
@@ -92,6 +94,7 @@ impl<K: Debug, V: Debug, C, A: Allocator + Clone> Debug for OccupiedError<'_, K,
     }
 }
 
+#[cfg(feature = "map_try_insert")]
 impl<'a, K: Debug, V: Debug, C, A: Allocator + Clone> fmt::Display
     for OccupiedError<'a, K, V, C, A>
 {
@@ -106,6 +109,7 @@ impl<'a, K: Debug, V: Debug, C, A: Allocator + Clone> fmt::Display
     }
 }
 
+#[cfg(feature = "map_try_insert")]
 #[cfg(feature = "error_in_core")]
 impl<'a, K: core::fmt::Debug, V: core::fmt::Debug, C> core::error::Error
     for OccupiedError<'a, K, V, C>

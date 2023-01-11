@@ -20,7 +20,9 @@ use super::set_val::SetValZST;
 
 mod entry;
 
-pub use entry::{Entry, OccupiedEntry, OccupiedError, VacantEntry};
+#[cfg(feature = "map_try_insert")]
+pub use entry::OccupiedError;
+pub use entry::{Entry, OccupiedEntry, VacantEntry};
 
 use Entry::*;
 
@@ -638,7 +640,7 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     }
 
     decorate_if! {
-        if #[cfg(feature = "allocator_api")] {
+        if #[cfg(feature = "btreemap_alloc")] {
             /// Makes a new empty BTreeMap with a reasonable choice for B, ordered by the given `comparator`.
             ///
             /// # Examples
@@ -1019,6 +1021,7 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// assert_eq!(err.entry.get(), &"a");
     /// assert_eq!(err.value, "b");
     /// ```
+    #[cfg(feature = "map_try_insert")]
     pub fn try_insert(&mut self, key: K, value: V) -> Result<&mut V, OccupiedError<'_, K, V, C, A>>
     where
         K: LookupKey<C>,
@@ -1383,45 +1386,50 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
         }
     }
 
-    /// Creates an iterator that visits all elements (key-value pairs) in
-    /// ascending key order and uses a closure to determine if an element should
-    /// be removed. If the closure returns `true`, the element is removed from
-    /// the map and yielded. If the closure returns `false`, or panics, the
-    /// element remains in the map and will not be yielded.
-    ///
-    /// The iterator also lets you mutate the value of each element in the
-    /// closure, regardless of whether you choose to keep or remove it.
-    ///
-    /// If the iterator is only partially consumed or not consumed at all, each
-    /// of the remaining elements is still subjected to the closure, which may
-    /// change its value and, by returning `true`, have the element removed and
-    /// dropped.
-    ///
-    /// It is unspecified how many more elements will be subjected to the
-    /// closure if a panic occurs in the closure, or a panic occurs while
-    /// dropping an element, or if the `DrainFilter` value is leaked.
-    ///
-    /// # Examples
-    ///
-    /// Splitting a map into even and odd keys, reusing the original map:
-    ///
-    /// ```
-    /// use copse::BTreeMap;
-    ///
-    /// let mut map: BTreeMap<i32, i32> = (0..8).map(|x| (x, x)).collect();
-    /// let evens: BTreeMap<_, _> = map.drain_filter(|k, _v| k % 2 == 0).collect();
-    /// let odds = map;
-    /// assert_eq!(evens.keys().copied().collect::<Vec<_>>(), [0, 2, 4, 6]);
-    /// assert_eq!(odds.keys().copied().collect::<Vec<_>>(), [1, 3, 5, 7]);
-    /// ```
-    pub fn drain_filter<F>(&mut self, pred: F) -> DrainFilter<'_, K, V, F, A>
-    where
-        K: LookupKey<C>,
-        C: Comparator,
-        F: FnMut(&K, &mut V) -> bool,
-    {
-        let (inner, alloc) = self.drain_filter_inner();
-        DrainFilter { pred, inner, alloc }
+    decorate_if! {
+        if #[cfg(feature = "btree_drain_filter")] {
+            /// Creates an iterator that visits all elements (key-value pairs) in
+            /// ascending key order and uses a closure to determine if an element should
+            /// be removed. If the closure returns `true`, the element is removed from
+            /// the map and yielded. If the closure returns `false`, or panics, the
+            /// element remains in the map and will not be yielded.
+            ///
+            /// The iterator also lets you mutate the value of each element in the
+            /// closure, regardless of whether you choose to keep or remove it.
+            ///
+            /// If the iterator is only partially consumed or not consumed at all, each
+            /// of the remaining elements is still subjected to the closure, which may
+            /// change its value and, by returning `true`, have the element removed and
+            /// dropped.
+            ///
+            /// It is unspecified how many more elements will be subjected to the
+            /// closure if a panic occurs in the closure, or a panic occurs while
+            /// dropping an element, or if the `DrainFilter` value is leaked.
+            ///
+            /// # Examples
+            ///
+            /// Splitting a map into even and odd keys, reusing the original map:
+            ///
+            /// ```
+            /// use copse::BTreeMap;
+            ///
+            /// let mut map: BTreeMap<i32, i32> = (0..8).map(|x| (x, x)).collect();
+            /// let evens: BTreeMap<_, _> = map.drain_filter(|k, _v| k % 2 == 0).collect();
+            /// let odds = map;
+            /// assert_eq!(evens.keys().copied().collect::<Vec<_>>(), [0, 2, 4, 6]);
+            /// assert_eq!(odds.keys().copied().collect::<Vec<_>>(), [1, 3, 5, 7]);
+            /// ```
+            pub
+        }
+        fn drain_filter<F>(&mut self, pred: F) -> DrainFilter<'_, K, V, F, A>
+        where
+            K: LookupKey<C>,
+            C: Comparator,
+            F: FnMut(&K, &mut V) -> bool,
+        {
+            let (inner, alloc) = self.drain_filter_inner();
+            DrainFilter { pred, inner, alloc }
+        }
     }
 
     pub(super) fn drain_filter_inner(&mut self) -> (DrainFilterInner<'_, K, V>, A)
@@ -1836,15 +1844,18 @@ impl<K, V> Clone for Values<'_, K, V> {
     }
 }
 
-/// An iterator produced by calling `drain_filter` on BTreeMap.
-pub struct DrainFilter<'a, K, V, F, A: Allocator + Clone = Global>
-where
-    F: 'a + FnMut(&K, &mut V) -> bool,
-{
-    pred: F,
-    inner: DrainFilterInner<'a, K, V>,
-    /// The BTreeMap will outlive this IntoIter so we don't care about drop order for `alloc`.
-    alloc: A,
+decorate_if! {
+    /// An iterator produced by calling `drain_filter` on BTreeMap.
+    if #[cfg(feature = "btree_drain_filter")] { pub }
+    struct DrainFilter<'a, K, V, F, A: Allocator + Clone = Global>
+    where
+        F: 'a + FnMut(&K, &mut V) -> bool,
+    {
+        pred: F,
+        inner: DrainFilterInner<'a, K, V>,
+        /// The BTreeMap will outlive this IntoIter so we don't care about drop order for `alloc`.
+        alloc: A,
+    }
 }
 /// Most of the implementation of DrainFilter are generic over the type
 /// of the predicate, thus also serving for BTreeSet::DrainFilter.
@@ -2363,42 +2374,50 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
         ValuesMut { inner: self.iter_mut() }
     }
 
-    /// Returns the number of elements in the map.
-    ///
-    /// # Examples
-    ///
-    /// Basic usage:
-    ///
-    /// ```
-    /// use copse::BTreeMap;
-    ///
-    /// let mut a = BTreeMap::default();
-    /// assert_eq!(a.len(), 0);
-    /// a.insert(1, "a");
-    /// assert_eq!(a.len(), 1);
-    /// ```
-    #[must_use]
-    pub const fn len(&self) -> usize {
-        self.length
+    decorate_if! {
+        /// Returns the number of elements in the map.
+        ///
+        /// # Examples
+        ///
+        /// Basic usage:
+        ///
+        /// ```
+        /// use copse::BTreeMap;
+        ///
+        /// let mut a = BTreeMap::default();
+        /// assert_eq!(a.len(), 0);
+        /// a.insert(1, "a");
+        /// assert_eq!(a.len(), 1);
+        /// ```
+        #[must_use]
+        pub
+        if #[cfg(feature = "const_btree_len")] { const }
+        fn len(&self) -> usize {
+            self.length
+        }
     }
 
-    /// Returns `true` if the map contains no elements.
-    ///
-    /// # Examples
-    ///
-    /// Basic usage:
-    ///
-    /// ```
-    /// use copse::BTreeMap;
-    ///
-    /// let mut a = BTreeMap::default();
-    /// assert!(a.is_empty());
-    /// a.insert(1, "a");
-    /// assert!(!a.is_empty());
-    /// ```
-    #[must_use]
-    pub const fn is_empty(&self) -> bool {
-        self.len() == 0
+    decorate_if! {
+        /// Returns `true` if the map contains no elements.
+        ///
+        /// # Examples
+        ///
+        /// Basic usage:
+        ///
+        /// ```
+        /// use copse::BTreeMap;
+        ///
+        /// let mut a = BTreeMap::default();
+        /// assert!(a.is_empty());
+        /// a.insert(1, "a");
+        /// assert!(!a.is_empty());
+        /// ```
+        #[must_use]
+        pub
+        if #[cfg(feature = "const_btree_len")] { const }
+        fn is_empty(&self) -> bool {
+            self.len() == 0
+        }
     }
 }
 

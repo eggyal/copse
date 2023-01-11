@@ -347,53 +347,57 @@ impl<T, C> BTreeSet<T, C> {
 }
 
 impl<T, C, A: Allocator + Clone> BTreeSet<T, C, A> {
-    /// Makes a new `BTreeSet` with a reasonable choice of B ordered by the given `comparator`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// #![feature(allocator_api)]
-    ///
-    /// use std::alloc::Global;
-    /// # use core::cmp::Ordering;
-    /// # use copse::{BTreeSet, Comparator, LookupKey, OrdComparator};
-    /// #
-    /// // define a comparator
-    /// struct NthByteComparator {
-    ///     n: usize, // runtime state
-    /// }
-    ///
-    /// impl Comparator for NthByteComparator {
-    ///     // etc
-    /// #     type Key = str;
-    /// #     fn cmp(&self, this: &str, that: &str) -> Ordering {
-    /// #         match (this.as_bytes().get(self.n), that.as_bytes().get(self.n)) {
-    /// #             (Some(lhs), Some(rhs)) => lhs.cmp(rhs),
-    /// #             (Some(_), None) => Ordering::Greater,
-    /// #             (None, Some(_)) => Ordering::Less,
-    /// #             (None, None) => Ordering::Equal,
-    /// #         }
-    /// #     }
-    /// }
-    ///
-    /// // define lookup key types for collections sorted by our comparator
-    /// impl LookupKey<NthByteComparator> for String {
-    ///     // etc
-    /// #     fn key(&self) -> &str { self.as_str() }
-    /// }
-    /// # impl LookupKey<NthByteComparator> for str {
-    /// #     fn key(&self) -> &str { self }
-    /// # }
-    ///
-    /// // create a set using our comparator
-    /// let mut set = BTreeSet::new_in(NthByteComparator { n: 10 }, Global);
-    ///
-    /// // entries can now be inserted into the empty map
-    /// assert!(set.insert("abcdefghij".to_string()));
-    /// ```
-    #[cfg(feature = "allocator_api")]
-    pub fn new_in(comparator: C, alloc: A) -> BTreeSet<T, C, A> {
-        BTreeSet { map: BTreeMap::new_in(comparator, alloc) }
+    decorate_if! {
+        if #[cfg(feature = "btreemap_alloc")] {
+            /// Makes a new `BTreeSet` with a reasonable choice of B ordered by the given `comparator`.
+            ///
+            /// # Examples
+            ///
+            /// ```
+            /// #![feature(allocator_api)]
+            ///
+            /// use std::alloc::Global;
+            /// # use core::cmp::Ordering;
+            /// # use copse::{BTreeSet, Comparator, LookupKey, OrdComparator};
+            /// #
+            /// // define a comparator
+            /// struct NthByteComparator {
+            ///     n: usize, // runtime state
+            /// }
+            ///
+            /// impl Comparator for NthByteComparator {
+            ///     // etc
+            /// #     type Key = str;
+            /// #     fn cmp(&self, this: &str, that: &str) -> Ordering {
+            /// #         match (this.as_bytes().get(self.n), that.as_bytes().get(self.n)) {
+            /// #             (Some(lhs), Some(rhs)) => lhs.cmp(rhs),
+            /// #             (Some(_), None) => Ordering::Greater,
+            /// #             (None, Some(_)) => Ordering::Less,
+            /// #             (None, None) => Ordering::Equal,
+            /// #         }
+            /// #     }
+            /// }
+            ///
+            /// // define lookup key types for collections sorted by our comparator
+            /// impl LookupKey<NthByteComparator> for String {
+            ///     // etc
+            /// #     fn key(&self) -> &str { self.as_str() }
+            /// }
+            /// # impl LookupKey<NthByteComparator> for str {
+            /// #     fn key(&self) -> &str { self }
+            /// # }
+            ///
+            /// // create a set using our comparator
+            /// let mut set = BTreeSet::new_in(NthByteComparator { n: 10 }, Global);
+            ///
+            /// // entries can now be inserted into the empty map
+            /// assert!(set.insert("abcdefghij".to_string()));
+            /// ```
+            pub
+        }
+        fn new_in(comparator: C, alloc: A) -> BTreeSet<T, C, A> {
+            BTreeSet { map: BTreeMap::new_in(comparator, alloc) }
+        }
     }
 
     /// Constructs a double-ended iterator over a sub-range of elements in the set.
@@ -1134,42 +1138,47 @@ impl<T, C, A: Allocator + Clone> BTreeSet<T, C, A> {
         BTreeSet { map: self.map.split_off(value) }
     }
 
-    /// Creates an iterator that visits all elements in ascending order and
-    /// uses a closure to determine if an element should be removed.
-    ///
-    /// If the closure returns `true`, the element is removed from the set and
-    /// yielded. If the closure returns `false`, or panics, the element remains
-    /// in the set and will not be yielded.
-    ///
-    /// If the iterator is only partially consumed or not consumed at all, each
-    /// of the remaining elements is still subjected to the closure and removed
-    /// and dropped if it returns `true`.
-    ///
-    /// It is unspecified how many more elements will be subjected to the
-    /// closure if a panic occurs in the closure, or if a panic occurs while
-    /// dropping an element, or if the `DrainFilter` itself is leaked.
-    ///
-    /// # Examples
-    ///
-    /// Splitting a set into even and odd values, reusing the original set:
-    ///
-    /// ```
-    /// use copse::BTreeSet;
-    ///
-    /// let mut set: BTreeSet<i32> = (0..8).collect();
-    /// let evens: BTreeSet<_> = set.drain_filter(|v| v % 2 == 0).collect();
-    /// let odds = set;
-    /// assert_eq!(evens.into_iter().collect::<Vec<_>>(), vec![0, 2, 4, 6]);
-    /// assert_eq!(odds.into_iter().collect::<Vec<_>>(), vec![1, 3, 5, 7]);
-    /// ```
-    pub fn drain_filter<'a, F>(&'a mut self, pred: F) -> DrainFilter<'a, T, F, A>
-    where
-        T: LookupKey<C>,
-        C: Comparator,
-        F: 'a + FnMut(&T) -> bool,
-    {
-        let (inner, alloc) = self.map.drain_filter_inner();
-        DrainFilter { pred, inner, alloc }
+    decorate_if! {
+        if #[cfg(feature = "btree_drain_filter")] {
+            /// Creates an iterator that visits all elements in ascending order and
+            /// uses a closure to determine if an element should be removed.
+            ///
+            /// If the closure returns `true`, the element is removed from the set and
+            /// yielded. If the closure returns `false`, or panics, the element remains
+            /// in the set and will not be yielded.
+            ///
+            /// If the iterator is only partially consumed or not consumed at all, each
+            /// of the remaining elements is still subjected to the closure and removed
+            /// and dropped if it returns `true`.
+            ///
+            /// It is unspecified how many more elements will be subjected to the
+            /// closure if a panic occurs in the closure, or if a panic occurs while
+            /// dropping an element, or if the `DrainFilter` itself is leaked.
+            ///
+            /// # Examples
+            ///
+            /// Splitting a set into even and odd values, reusing the original set:
+            ///
+            /// ```
+            /// use copse::BTreeSet;
+            ///
+            /// let mut set: BTreeSet<i32> = (0..8).collect();
+            /// let evens: BTreeSet<_> = set.drain_filter(|v| v % 2 == 0).collect();
+            /// let odds = set;
+            /// assert_eq!(evens.into_iter().collect::<Vec<_>>(), vec![0, 2, 4, 6]);
+            /// assert_eq!(odds.into_iter().collect::<Vec<_>>(), vec![1, 3, 5, 7]);
+            /// ```
+            pub
+        }
+        fn drain_filter<'a, F>(&'a mut self, pred: F) -> DrainFilter<'a, T, F, A>
+        where
+            T: LookupKey<C>,
+            C: Comparator,
+            F: 'a + FnMut(&T) -> bool,
+        {
+            let (inner, alloc) = self.map.drain_filter_inner();
+            DrainFilter { pred, inner, alloc }
+        }
     }
 
     /// Gets an iterator that visits the elements in the `BTreeSet` in ascending
@@ -1204,38 +1213,46 @@ impl<T, C, A: Allocator + Clone> BTreeSet<T, C, A> {
         Iter { iter: self.map.keys() }
     }
 
-    /// Returns the number of elements in the set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use copse::BTreeSet;
-    ///
-    /// let mut v = BTreeSet::default();
-    /// assert_eq!(v.len(), 0);
-    /// v.insert(1);
-    /// assert_eq!(v.len(), 1);
-    /// ```
-    #[must_use]
-    pub const fn len(&self) -> usize {
-        self.map.len()
+    decorate_if! {
+        /// Returns the number of elements in the set.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use copse::BTreeSet;
+        ///
+        /// let mut v = BTreeSet::default();
+        /// assert_eq!(v.len(), 0);
+        /// v.insert(1);
+        /// assert_eq!(v.len(), 1);
+        /// ```
+        #[must_use]
+        pub
+        if #[cfg(feature = "const_btree_len")] { const }
+        fn len(&self) -> usize {
+            self.map.len()
+        }
     }
 
-    /// Returns `true` if the set contains no elements.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use copse::BTreeSet;
-    ///
-    /// let mut v = BTreeSet::default();
-    /// assert!(v.is_empty());
-    /// v.insert(1);
-    /// assert!(!v.is_empty());
-    /// ```
-    #[must_use]
-    pub const fn is_empty(&self) -> bool {
-        self.len() == 0
+    decorate_if! {
+        /// Returns `true` if the set contains no elements.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use copse::BTreeSet;
+        ///
+        /// let mut v = BTreeSet::default();
+        /// assert!(v.is_empty());
+        /// v.insert(1);
+        /// assert!(!v.is_empty());
+        /// ```
+        #[must_use]
+        pub
+        if #[cfg(feature = "const_btree_len")] { const }
+        fn is_empty(&self) -> bool {
+            self.len() == 0
+        }
     }
 }
 
@@ -1320,16 +1337,19 @@ impl<'a, T, C: Comparator, A: Allocator + Clone> IntoIterator for &'a BTreeSet<T
     }
 }
 
-/// An iterator produced by calling `drain_filter` on BTreeSet.
-pub struct DrainFilter<'a, T, F, A: Allocator + Clone = Global>
-where
-    T: 'a,
-    F: 'a + FnMut(&T) -> bool,
-{
-    pred: F,
-    inner: super::map::DrainFilterInner<'a, T, SetValZST>,
-    /// The BTreeMap will outlive this IntoIter so we don't care about drop order for `alloc`.
-    alloc: A,
+decorate_if! {
+    /// An iterator produced by calling `drain_filter` on BTreeSet.
+    if #[cfg(feature = "btree_drain_filter")] { pub }
+    struct DrainFilter<'a, T, F, A: Allocator + Clone = Global>
+    where
+        T: 'a,
+        F: 'a + FnMut(&T) -> bool,
+    {
+        pred: F,
+        inner: super::map::DrainFilterInner<'a, T, SetValZST>,
+        /// The BTreeMap will outlive this IntoIter so we don't care about drop order for `alloc`.
+        alloc: A,
+    }
 }
 
 impl<T, F, A: Allocator + Clone> Drop for DrainFilter<'_, T, F, A>

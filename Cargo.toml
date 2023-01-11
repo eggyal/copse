@@ -1,6 +1,6 @@
 [package]
 name = "copse"
-version = "0.2.0"
+version = "0.3.0"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/eggyal/copse.git"
 description = "Direct ports of the standard library's B-Tree collections, but that sort according to a specified comparator rather than the `Ord` trait"
@@ -10,6 +10,7 @@ categories = ["data-structures", "no-std"]
 
 [features]
 allocator_api = []
+btreemap_alloc = ["allocator_api"]
 core_intrinsics = []
 dropck_eyepatch = []
 error_in_core = []
@@ -22,8 +23,9 @@ new_uninit = []
 rustc_attrs = []
 slice_ptr_get = []
 specialization = []
-unstable = [
+nightly = [
     "allocator_api",
+    "btreemap_alloc",
     "core_intrinsics",
     "dropck_eyepatch",
     "error_in_core",
@@ -38,12 +40,17 @@ unstable = [
     "specialization",
 ]
 
+btree_drain_filter = []
+const_btree_len = []
+const_btree_new = ["const_btree_len"]
+map_try_insert = []
+unstable = [
+    "btree_drain_filter",
+    "const_btree_new",
+    "map_try_insert",
+]
 
 std = []
-
-# unused but retained for backward-compat
-bound_map = []
-map_try_insert = []
 
 [dependencies]
 cfg-if = "1.0.0"
