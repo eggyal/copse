@@ -1,6 +1,7 @@
 use super::merge_iter::MergeIterInner;
 use super::node::{self, Root};
 use crate::polyfill::*;
+use core::cmp::Ordering;
 use core::iter::FusedIterator;
 
 impl<K, V> Root<K, V> {
@@ -20,13 +21,13 @@ impl<K, V> Root<K, V> {
         left: I,
         right: I,
         length: &mut usize,
+        comparator: impl Fn(&(K, V), &(K, V)) -> Ordering,
         alloc: A,
     ) where
-        K: Ord,
         I: Iterator<Item = (K, V)> + FusedIterator,
     {
         // We prepare to merge `left` and `right` into a sorted sequence in linear time.
-        let iter = MergeIter(MergeIterInner::new(left, right));
+        let iter = MergeIter(MergeIterInner::new(left, right), comparator);
 
         // Meanwhile, we build a tree from the sorted sequence in linear time.
         self.bulk_push(iter, length, alloc)
@@ -91,17 +92,18 @@ impl<K, V> Root<K, V> {
 }
 
 // An iterator for merging two sorted sequences into one
-struct MergeIter<K, V, I: Iterator<Item = (K, V)>>(MergeIterInner<I>);
+struct MergeIter<K, V, C, I: Iterator<Item = (K, V)>>(MergeIterInner<I>, C);
 
-impl<K: Ord, V, I> Iterator for MergeIter<K, V, I>
+impl<K, V, C, I> Iterator for MergeIter<K, V, C, I>
 where
+    C: Fn(&(K, V), &(K, V)) -> Ordering,
     I: Iterator<Item = (K, V)> + FusedIterator,
 {
     type Item = (K, V);
 
     /// If two keys are equal, returns the key-value pair from the right source.
     fn next(&mut self) -> Option<(K, V)> {
-        let (a_next, b_next) = self.0.nexts(|a: &(K, V), b: &(K, V)| K::cmp(&a.0, &b.0));
+        let (a_next, b_next) = self.0.nexts(|this, that| self.1(this, that));
         b_next.or(a_next)
     }
 }
