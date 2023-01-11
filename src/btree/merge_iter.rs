@@ -24,11 +24,7 @@ where
     I::Item: Clone,
 {
     fn clone(&self) -> Self {
-        Self {
-            a: self.a.clone(),
-            b: self.b.clone(),
-            peeked: self.peeked.clone(),
-        }
+        Self { a: self.a.clone(), b: self.b.clone(), peeked: self.peeked.clone() }
     }
 }
 
@@ -38,11 +34,7 @@ where
     I::Item: Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("MergeIterInner")
-            .field(&self.a)
-            .field(&self.b)
-            .field(&self.peeked)
-            .finish()
+        f.debug_tuple("MergeIterInner").field(&self.a).field(&self.b).field(&self.peeked).finish()
     }
 }
 

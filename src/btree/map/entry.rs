@@ -15,22 +15,12 @@ use Entry::*;
 /// This `enum` is constructed from the [`entry`] method on [`BTreeMap`].
 ///
 /// [`entry`]: BTreeMap::entry
-pub enum Entry<
-    'a,
-    K: 'a,
-    V: 'a,
-    C,
-    A: Allocator + Clone = Global,
-> {
+pub enum Entry<'a, K: 'a, V: 'a, C, A: Allocator + Clone = Global> {
     /// A vacant entry.
-    Vacant(
-        VacantEntry<'a, K, V, C, A>,
-    ),
+    Vacant(VacantEntry<'a, K, V, C, A>),
 
     /// An occupied entry.
-    Occupied(
-        OccupiedEntry<'a, K, V, C, A>,
-    ),
+    Occupied(OccupiedEntry<'a, K, V, C, A>),
 }
 
 impl<K: Debug, V: Debug, C, A: Allocator + Clone> Debug for Entry<'_, K, V, C, A> {
@@ -44,13 +34,7 @@ impl<K: Debug, V: Debug, C, A: Allocator + Clone> Debug for Entry<'_, K, V, C, A
 
 /// A view into a vacant entry in a `BTreeMap`.
 /// It is part of the [`Entry`] enum.
-pub struct VacantEntry<
-    'a,
-    K,
-    V,
-    C,
-    A: Allocator + Clone = Global,
-> {
+pub struct VacantEntry<'a, K, V, C, A: Allocator + Clone = Global> {
     pub(super) key: K,
     /// `None` for a (empty) map without root
     pub(super) handle: Option<Handle<NodeRef<marker::Mut<'a>, K, V, marker::Leaf>, marker::Edge>>,
@@ -71,13 +55,7 @@ impl<K: Debug, V, C, A: Allocator + Clone> Debug for VacantEntry<'_, K, V, C, A>
 
 /// A view into an occupied entry in a `BTreeMap`.
 /// It is part of the [`Entry`] enum.
-pub struct OccupiedEntry<
-    'a,
-    K,
-    V,
-    C,
-    A: Allocator + Clone = Global,
-> {
+pub struct OccupiedEntry<'a, K, V, C, A: Allocator + Clone = Global> {
     pub(super) handle: Handle<NodeRef<marker::Mut<'a>, K, V, marker::LeafOrInternal>, marker::KV>,
     pub(super) dormant_map: DormantMutRef<'a, BTreeMap<K, V, C, A>>,
 
@@ -90,10 +68,7 @@ pub struct OccupiedEntry<
 
 impl<K: Debug, V: Debug, C, A: Allocator + Clone> Debug for OccupiedEntry<'_, K, V, C, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("OccupiedEntry")
-            .field("key", self.key())
-            .field("value", self.get())
-            .finish()
+        f.debug_struct("OccupiedEntry").field("key", self.key()).field("value", self.get()).finish()
     }
 }
 
@@ -361,8 +336,7 @@ impl<'a, K, V, C, A: Allocator + Clone> VacantEntry<'a, K, V, C, A> {
                     // remaining reference to the tree, ins.left.
                     let map = unsafe { self.dormant_map.awaken() };
                     let root = map.root.as_mut().unwrap(); // same as ins.left
-                    root.push_internal_level(self.alloc)
-                        .push(ins.kv.0, ins.kv.1, ins.right);
+                    root.push_internal_level(self.alloc).push(ins.kv.0, ins.kv.1, ins.right);
                     map.length += 1;
                     val_ptr
                 }
@@ -535,9 +509,8 @@ impl<'a, K, V, C, A: Allocator + Clone> OccupiedEntry<'a, K, V, C, A> {
     // Body of `remove_entry`, probably separate because the name reflects the returned pair.
     pub(super) fn remove_kv(self) -> (K, V) {
         let mut emptied_internal_root = false;
-        let (old_kv, _) = self
-            .handle
-            .remove_kv_tracking(|| emptied_internal_root = true, self.alloc.clone());
+        let (old_kv, _) =
+            self.handle.remove_kv_tracking(|| emptied_internal_root = true, self.alloc.clone());
         // SAFETY: we consumed the intermediate root borrow, `self.handle`.
         let map = unsafe { self.dormant_map.awaken() };
         map.length -= 1;

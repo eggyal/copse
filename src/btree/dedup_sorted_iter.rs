@@ -21,10 +21,7 @@ where
     I: Iterator<Item = (K, V)>,
 {
     pub fn new(iter: I, comparator: &'a C) -> Self {
-        Self {
-            iter: iter.peekable(),
-            comparator,
-        }
+        Self { iter: iter.peekable(), comparator }
     }
 }
 

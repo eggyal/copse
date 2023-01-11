@@ -33,10 +33,7 @@ impl CrashTestDummy {
     /// Creates an instance of a crash test dummy that records what events it experiences
     /// and optionally panics.
     pub fn spawn(&self, panic: Panic) -> Instance<'_> {
-        Instance {
-            origin: self,
-            panic,
-        }
+        Instance { origin: self, panic }
     }
 
     /// Returns how many times instances of the dummy have been cloned.
@@ -94,10 +91,7 @@ impl Clone for Instance<'_> {
         if self.panic == Panic::InClone {
             panic!("panic in `clone`");
         }
-        Self {
-            origin: self.origin,
-            panic: Panic::Never,
-        }
+        Self { origin: self.origin, panic: Panic::Never }
     }
 }
 

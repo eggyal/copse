@@ -255,10 +255,7 @@ impl<BorrowType, K, V, Type> NodeRef<BorrowType, K, V, Type> {
         let node = self.reborrow();
         let keys = node.keys();
         debug_assert!(start_index <= keys.len());
-        for (offset, k) in unsafe { keys.get_unchecked(start_index..) }
-            .iter()
-            .enumerate()
-        {
+        for (offset, k) in unsafe { keys.get_unchecked(start_index..) }.iter().enumerate() {
             match comparator.cmp(key.key(), k.key()) {
                 Ordering::Greater => {}
                 Ordering::Equal => return IndexResult::KV(start_index + offset),

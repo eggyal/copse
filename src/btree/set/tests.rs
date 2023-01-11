@@ -85,11 +85,7 @@ fn test_intersection() {
     check_intersection(&[], &[1, 2, 3], &[]);
     check_intersection(&[2], &[1, 2, 3], &[2]);
     check_intersection(&[1, 2, 3], &[2], &[2]);
-    check_intersection(
-        &[11, 1, 3, 77, 103, 5, -5],
-        &[2, 11, 77, -9, -42, 5, 3],
-        &[3, 5, 11, 77],
-    );
+    check_intersection(&[11, 1, 3, 77, 103, 5, -5], &[2, 11, 77, -9, -42, 5, 3], &[3, 5, 11, 77]);
 
     if cfg!(miri) {
         // Miri is too slow
@@ -235,11 +231,7 @@ fn test_symmetric_difference() {
     check_symmetric_difference(&[], &[], &[]);
     check_symmetric_difference(&[1, 2, 3], &[2], &[1, 3]);
     check_symmetric_difference(&[2], &[1, 2, 3], &[1, 3]);
-    check_symmetric_difference(
-        &[1, 3, 5, 9, 11],
-        &[-2, 3, 9, 14, 22],
-        &[-2, 1, 5, 11, 14, 22],
-    );
+    check_symmetric_difference(&[1, 3, 5, 9, 11], &[-2, 3, 9, 14, 22], &[-2, 1, 5, 11, 14, 22]);
 }
 
 #[test]
@@ -312,10 +304,7 @@ fn test_is_subset() {
         &[-5, 11, 22, 33, 40, 42],
         &[-12, -5, 11, 14, 22, 23, 33, 34, 38, 39, 40, 42]
     ));
-    assert!(!is_subset(
-        &[-5, 11, 22, 33, 40, 42],
-        &[-12, -5, 11, 14, 22, 23, 34, 38]
-    ));
+    assert!(!is_subset(&[-5, 11, 22, 33, 40, 42], &[-12, -5, 11, 14, 22, 23, 34, 38]));
 
     if cfg!(miri) {
         // Miri is too slow
@@ -418,10 +407,7 @@ fn test_drain_filter_pred_panic_leak() {
     set.insert(b.spawn(Panic::InQuery));
     set.insert(c.spawn(Panic::InQuery));
 
-    catch_unwind(AssertUnwindSafe(|| {
-        drop(set.drain_filter(|dummy| dummy.query(true)))
-    }))
-    .ok();
+    catch_unwind(AssertUnwindSafe(|| drop(set.drain_filter(|dummy| dummy.query(true))))).ok();
 
     assert_eq!(a.queried(), 1);
     assert_eq!(b.queried(), 1);
@@ -828,11 +814,7 @@ fn test_split_off_empty_left() {
 #[test]
 fn test_split_off_large_random_sorted() {
     // Miri is too slow
-    let mut data = if cfg!(miri) {
-        rand_data(529)
-    } else {
-        rand_data(1529)
-    };
+    let mut data = if cfg!(miri) { rand_data(529) } else { rand_data(1529) };
     // special case with maximum height.
     data.sort();
 
@@ -840,9 +822,7 @@ fn test_split_off_large_random_sorted() {
     let key = data[data.len() / 2];
     let right = set.split_off(&key);
 
-    assert!(set
-        .into_iter()
-        .eq(data.clone().into_iter().filter(|x| *x < key)));
+    assert!(set.into_iter().eq(data.clone().into_iter().filter(|x| *x < key)));
     assert!(right.into_iter().eq(data.into_iter().filter(|x| *x >= key)));
 }
 

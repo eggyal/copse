@@ -339,10 +339,8 @@ where
 
     fn replace(&mut self, key: K) -> Option<K> {
         let (map, dormant_map) = DormantMutRef::new(self);
-        let root_node = map
-            .root
-            .get_or_insert_with(|| Root::new((*map.alloc).clone()))
-            .borrow_mut();
+        let root_node =
+            map.root.get_or_insert_with(|| Root::new((*map.alloc).clone())).borrow_mut();
         match root_node.search_tree(&key, &map.comparator) {
             Found(mut kv) => Some(mem::replace(kv.key_mut(), key)),
             GoDown(handle) => {
@@ -395,10 +393,7 @@ pub struct IterMut<'a, K: 'a, V: 'a> {
 
 impl<K: fmt::Debug, V: fmt::Debug> fmt::Debug for IterMut<'_, K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let range = Iter {
-            range: self.range.reborrow(),
-            length: self.length,
-        };
+        let range = Iter { range: self.range.reborrow(), length: self.length };
         f.debug_list().entries(range).finish()
     }
 }
@@ -411,11 +406,7 @@ impl<K: fmt::Debug, V: fmt::Debug> fmt::Debug for IterMut<'_, K, V> {
 /// [`into_iter`]: IntoIterator::into_iter
 /// [`IntoIterator`]: core::iter::IntoIterator
 #[cfg_attr(feature = "rustc_attrs", rustc_insignificant_dtor)]
-pub struct IntoIter<
-    K,
-    V,
-    A: Allocator + Clone = Global,
-> {
+pub struct IntoIter<K, V, A: Allocator + Clone = Global> {
     range: LazyLeafRange<marker::Dying, K, V>,
     length: usize,
     /// The BTreeMap will outlive this IntoIter so we don't care about drop order for `alloc`.
@@ -426,10 +417,7 @@ impl<K, V, A: Allocator + Clone> IntoIter<K, V, A> {
     /// Returns an iterator of references over the remaining items.
     #[inline]
     pub(super) fn iter(&self) -> Iter<'_, K, V> {
-        Iter {
-            range: self.range.reborrow(),
-            length: self.length,
-        }
+        Iter { range: self.range.reborrow(), length: self.length }
     }
 }
 
@@ -486,9 +474,7 @@ pub struct ValuesMut<'a, K, V> {
 
 impl<K, V: fmt::Debug> fmt::Debug for ValuesMut<'_, K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_list()
-            .entries(self.inner.iter().map(|(_, val)| val))
-            .finish()
+        f.debug_list().entries(self.inner.iter().map(|(_, val)| val)).finish()
     }
 }
 
@@ -505,9 +491,7 @@ pub struct IntoKeys<K, V, A: Allocator + Clone = Global> {
 
 impl<K: fmt::Debug, V, A: Allocator + Clone> fmt::Debug for IntoKeys<K, V, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_list()
-            .entries(self.inner.iter().map(|(key, _)| key))
-            .finish()
+        f.debug_list().entries(self.inner.iter().map(|(key, _)| key)).finish()
     }
 }
 
@@ -518,19 +502,13 @@ impl<K: fmt::Debug, V, A: Allocator + Clone> fmt::Debug for IntoKeys<K, V, A> {
 ///
 /// [`into_values`]: BTreeMap::into_values
 #[must_use = "iterators are lazy and do nothing unless consumed"]
-pub struct IntoValues<
-    K,
-    V,
-    A: Allocator + Clone = Global,
-> {
+pub struct IntoValues<K, V, A: Allocator + Clone = Global> {
     inner: IntoIter<K, V, A>,
 }
 
 impl<K, V: fmt::Debug, A: Allocator + Clone> fmt::Debug for IntoValues<K, V, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_list()
-            .entries(self.inner.iter().map(|(_, val)| val))
-            .finish()
+        f.debug_list().entries(self.inner.iter().map(|(_, val)| val)).finish()
     }
 }
 
@@ -567,9 +545,7 @@ pub struct RangeMut<'a, K: 'a, V: 'a> {
 
 impl<K: fmt::Debug, V: fmt::Debug> fmt::Debug for RangeMut<'_, K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let range = Range {
-            inner: self.inner.reborrow(),
-        };
+        let range = Range { inner: self.inner.reborrow() };
         f.debug_list().entries(range).finish()
     }
 }
@@ -591,7 +567,7 @@ impl<K, V, C> BTreeMap<K, V, C> {
     /// struct NthByteComparator {
     ///     n: usize, // runtime state
     /// }
-    /// 
+    ///
     /// impl Comparator for NthByteComparator {
     ///     // etc
     /// #     type Key = str;
@@ -604,7 +580,7 @@ impl<K, V, C> BTreeMap<K, V, C> {
     /// #         }
     /// #     }
     /// }
-    /// 
+    ///
     /// // define lookup key types for collections sorted by our comparator
     /// impl LookupKey<NthByteComparator> for String {
     ///     // etc
@@ -613,7 +589,7 @@ impl<K, V, C> BTreeMap<K, V, C> {
     /// # impl LookupKey<NthByteComparator> for str {
     /// #     fn key(&self) -> &str { self }
     /// # }
-    /// 
+    ///
     /// // create a map using our comparator
     /// let mut map = BTreeMap::new(NthByteComparator { n: 10 });
     ///
@@ -783,11 +759,7 @@ where
     /// ```
     pub fn first_key_value(&self) -> Option<(&K, &V)> {
         let root_node = self.root.as_ref()?.reborrow();
-        root_node
-            .first_leaf_edge()
-            .right_kv()
-            .ok()
-            .map(Handle::into_kv)
+        root_node.first_leaf_edge().right_kv().ok().map(Handle::into_kv)
     }
 
     /// Returns the first entry in the map for in-place manipulation.
@@ -860,11 +832,7 @@ where
     /// ```
     pub fn last_key_value(&self) -> Option<(&K, &V)> {
         let root_node = self.root.as_ref()?.reborrow();
-        root_node
-            .last_leaf_edge()
-            .left_kv()
-            .ok()
-            .map(Handle::into_kv)
+        root_node.last_leaf_edge().left_kv().ok().map(Handle::into_kv)
     }
 
     /// Returns the last entry in the map for in-place manipulation.
@@ -1176,19 +1144,13 @@ where
             return;
         }
 
-        let self_iter = mem::replace(
-            self,
-            Self::new_in(self.comparator.clone(), (*self.alloc).clone()),
-        )
-        .into_iter();
-        let other_iter = mem::replace(
-            other,
-            Self::new_in(self.comparator.clone(), (*self.alloc).clone()),
-        )
-        .into_iter();
-        let root = self
-            .root
-            .get_or_insert_with(|| Root::new((*self.alloc).clone()));
+        let self_iter =
+            mem::replace(self, Self::new_in(self.comparator.clone(), (*self.alloc).clone()))
+                .into_iter();
+        let other_iter =
+            mem::replace(other, Self::new_in(self.comparator.clone(), (*self.alloc).clone()))
+                .into_iter();
+        let root = self.root.get_or_insert_with(|| Root::new((*self.alloc).clone()));
         root.append_from_sorted_iters(
             self_iter,
             other_iter,
@@ -1233,13 +1195,9 @@ where
         R: RangeBounds<T>,
     {
         if let Some(root) = &self.root {
-            Range {
-                inner: root.reborrow().range_search(&self.comparator, range),
-            }
+            Range { inner: root.reborrow().range_search(&self.comparator, range) }
         } else {
-            Range {
-                inner: LeafRange::none(),
-            }
+            Range { inner: LeafRange::none() }
         }
     }
 
@@ -1282,10 +1240,7 @@ where
                 _marker: PhantomData,
             }
         } else {
-            RangeMut {
-                inner: LeafRange::none(),
-                _marker: PhantomData,
-            }
+            RangeMut { inner: LeafRange::none(), _marker: PhantomData }
         }
     }
 
@@ -1501,9 +1456,7 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// ```
     #[inline]
     pub fn into_keys(self) -> IntoKeys<K, V, A> {
-        IntoKeys {
-            inner: self.into_iter(),
-        }
+        IntoKeys { inner: self.into_iter() }
     }
 
     /// Creates a consuming iterator visiting all the values, in order by key.
@@ -1524,9 +1477,7 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// ```
     #[inline]
     pub fn into_values(self) -> IntoValues<K, V, A> {
-        IntoValues {
-            inner: self.into_iter(),
-        }
+        IntoValues { inner: self.into_iter() }
     }
 }
 
@@ -1589,10 +1540,7 @@ impl<K, V> ExactSizeIterator for Iter<'_, K, V> {
 
 impl<K, V> Clone for Iter<'_, K, V> {
     fn clone(&self) -> Self {
-        Iter {
-            range: self.range.clone(),
-            length: self.length,
-        }
+        Iter { range: self.range.clone(), length: self.length }
     }
 }
 
@@ -1657,10 +1605,7 @@ impl<'a, K, V> IterMut<'a, K, V> {
     /// Returns an iterator of references over the remaining items.
     #[inline]
     pub(super) fn iter(&self) -> Iter<'_, K, V> {
-        Iter {
-            range: self.range.reborrow(),
-            length: self.length,
-        }
+        Iter { range: self.range.reborrow(), length: self.length }
     }
 }
 
@@ -1737,10 +1682,7 @@ impl<K, V, A: Allocator + Clone> IntoIter<K, V, A> {
             None
         } else {
             self.length -= 1;
-            Some(unsafe {
-                self.range
-                    .deallocating_next_back_unchecked(self.alloc.clone())
-            })
+            Some(unsafe { self.range.deallocating_next_back_unchecked(self.alloc.clone()) })
         }
     }
 }
@@ -1761,8 +1703,7 @@ impl<K, V, A: Allocator + Clone> Iterator for IntoIter<K, V, A> {
 impl<K, V, A: Allocator + Clone> DoubleEndedIterator for IntoIter<K, V, A> {
     fn next_back(&mut self) -> Option<(K, V)> {
         // SAFETY: we consume the dying handle immediately.
-        self.dying_next_back()
-            .map(unsafe { |kv| kv.into_key_val() })
+        self.dying_next_back().map(unsafe { |kv| kv.into_key_val() })
     }
 }
 
@@ -1814,9 +1755,7 @@ impl<K, V> FusedIterator for Keys<'_, K, V> {}
 
 impl<K, V> Clone for Keys<'_, K, V> {
     fn clone(&self) -> Self {
-        Keys {
-            inner: self.inner.clone(),
-        }
+        Keys { inner: self.inner.clone() }
     }
 }
 
@@ -1852,20 +1791,13 @@ impl<K, V> FusedIterator for Values<'_, K, V> {}
 
 impl<K, V> Clone for Values<'_, K, V> {
     fn clone(&self) -> Self {
-        Values {
-            inner: self.inner.clone(),
-        }
+        Values { inner: self.inner.clone() }
     }
 }
 
 /// An iterator produced by calling `drain_filter` on BTreeMap.
-pub struct DrainFilter<
-    'a,
-    K,
-    V,
-    F,
-    A: Allocator + Clone = Global,
-> where
+pub struct DrainFilter<'a, K, V, F, A: Allocator + Clone = Global>
+where
     F: 'a + FnMut(&K, &mut V) -> bool,
 {
     pred: F,
@@ -1903,9 +1835,7 @@ where
     F: FnMut(&K, &mut V) -> bool,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("DrainFilter")
-            .field(&self.inner.peek())
-            .finish()
+        f.debug_tuple("DrainFilter").field(&self.inner.peek()).finish()
     }
 }
 
@@ -2306,15 +2236,9 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
         if let Some(root) = &self.root {
             let full_range = root.reborrow().full_range();
 
-            Iter {
-                range: full_range,
-                length: self.length,
-            }
+            Iter { range: full_range, length: self.length }
         } else {
-            Iter {
-                range: LazyLeafRange::none(),
-                length: 0,
-            }
+            Iter { range: LazyLeafRange::none(), length: 0 }
         }
     }
 
@@ -2344,17 +2268,9 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
         if let Some(root) = &mut self.root {
             let full_range = root.borrow_valmut().full_range();
 
-            IterMut {
-                range: full_range,
-                length: self.length,
-                _marker: PhantomData,
-            }
+            IterMut { range: full_range, length: self.length, _marker: PhantomData }
         } else {
-            IterMut {
-                range: LazyLeafRange::none(),
-                length: 0,
-                _marker: PhantomData,
-            }
+            IterMut { range: LazyLeafRange::none(), length: 0, _marker: PhantomData }
         }
     }
 
@@ -2420,9 +2336,7 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     ///                     String::from("goodbye!")]);
     /// ```
     pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
-        ValuesMut {
-            inner: self.iter_mut(),
-        }
+        ValuesMut { inner: self.iter_mut() }
     }
 
     /// Returns the number of elements in the map.

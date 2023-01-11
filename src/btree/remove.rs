@@ -11,10 +11,7 @@ impl<'a, K: 'a, V: 'a> Handle<NodeRef<marker::Mut<'a>, K, V, marker::LeafOrInter
         self,
         handle_emptied_internal_root: F,
         alloc: A,
-    ) -> (
-        (K, V),
-        Handle<NodeRef<marker::Mut<'a>, K, V, marker::Leaf>, marker::Edge>,
-    ) {
+    ) -> ((K, V), Handle<NodeRef<marker::Mut<'a>, K, V, marker::Leaf>, marker::Edge>) {
         match self.force() {
             Leaf(node) => node.remove_leaf_kv(handle_emptied_internal_root, alloc),
             Internal(node) => node.remove_internal_kv(handle_emptied_internal_root, alloc),
@@ -27,10 +24,7 @@ impl<'a, K: 'a, V: 'a> Handle<NodeRef<marker::Mut<'a>, K, V, marker::Leaf>, mark
         self,
         handle_emptied_internal_root: F,
         alloc: A,
-    ) -> (
-        (K, V),
-        Handle<NodeRef<marker::Mut<'a>, K, V, marker::Leaf>, marker::Edge>,
-    ) {
+    ) -> ((K, V), Handle<NodeRef<marker::Mut<'a>, K, V, marker::Leaf>, marker::Edge>) {
         let (old_kv, mut pos) = self.remove();
         let len = pos.reborrow().into_node().len();
         if len < MIN_LEN {
@@ -69,11 +63,7 @@ impl<'a, K: 'a, V: 'a> Handle<NodeRef<marker::Mut<'a>, K, V, marker::Leaf>, mark
             // rearrange the parent through the grandparent, thus change the
             // link to the parent inside the leaf.
             if let Ok(parent) = unsafe { pos.reborrow_mut() }.into_node().ascend() {
-                if !parent
-                    .into_node()
-                    .forget_type()
-                    .fix_node_and_affected_ancestors(alloc)
-                {
+                if !parent.into_node().forget_type().fix_node_and_affected_ancestors(alloc) {
                     handle_emptied_internal_root();
                 }
             }
@@ -87,10 +77,7 @@ impl<'a, K: 'a, V: 'a> Handle<NodeRef<marker::Mut<'a>, K, V, marker::Internal>, 
         self,
         handle_emptied_internal_root: F,
         alloc: A,
-    ) -> (
-        (K, V),
-        Handle<NodeRef<marker::Mut<'a>, K, V, marker::Leaf>, marker::Edge>,
-    ) {
+    ) -> ((K, V), Handle<NodeRef<marker::Mut<'a>, K, V, marker::Leaf>, marker::Edge>) {
         // Remove an adjacent KV from its leaf and then put it back in place of
         // the element we were asked to remove. Prefer the left adjacent KV,
         // for the reasons listed in `choose_parent_kv`.

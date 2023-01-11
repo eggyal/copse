@@ -95,10 +95,7 @@
 #![cfg_attr(feature = "exact_size_is_empty", feature(exact_size_is_empty))]
 #![cfg_attr(feature = "exclusive_range_pattern", feature(exclusive_range_pattern))]
 #![cfg_attr(feature = "extend_one", feature(extend_one))]
-#![cfg_attr(
-    feature = "hasher_prefixfree_extras",
-    feature(hasher_prefixfree_extras)
-)]
+#![cfg_attr(feature = "hasher_prefixfree_extras", feature(hasher_prefixfree_extras))]
 #![cfg_attr(feature = "map_try_insert", feature(map_try_insert))]
 #![cfg_attr(feature = "maybe_uninit_slice", feature(maybe_uninit_slice))]
 #![cfg_attr(feature = "new_uninit", feature(new_uninit))]

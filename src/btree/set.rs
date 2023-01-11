@@ -76,11 +76,7 @@ use crate::polyfill::*;
 ///
 /// let set = BTreeSet::from([1, 2, 3]);
 /// ```
-pub struct BTreeSet<
-    T,
-    C = OrdComparator<T>,
-    A: Allocator + Clone = Global,
-> {
+pub struct BTreeSet<T, C = OrdComparator<T>, A: Allocator + Clone = Global> {
     map: BTreeMap<T, SetValZST, C, A>,
 }
 
@@ -112,9 +108,7 @@ impl<T: Ord, C, A: Allocator + Clone> Ord for BTreeSet<T, C, A> {
 
 impl<T: Clone, C: Clone, A: Allocator + Clone> Clone for BTreeSet<T, C, A> {
     fn clone(&self) -> Self {
-        BTreeSet {
-            map: self.map.clone(),
-        }
+        BTreeSet { map: self.map.clone() }
     }
 
     fn clone_from(&mut self, other: &Self) {
@@ -147,10 +141,7 @@ impl<T: fmt::Debug> fmt::Debug for Iter<'_, T> {
 /// [`into_iter`]: BTreeSet#method.into_iter
 /// [`IntoIterator`]: core::iter::IntoIterator
 #[derive(Debug)]
-pub struct IntoIter<
-    T,
-    A: Allocator + Clone = Global,
-> {
+pub struct IntoIter<T, A: Allocator + Clone = Global> {
     iter: super::map::IntoIter<T, SetValZST, A>,
 }
 
@@ -174,12 +165,7 @@ pub struct Range<'a, T: 'a> {
 /// [`difference`]: BTreeSet::difference
 #[must_use = "this returns the difference as an iterator, \
               without modifying either input set"]
-pub struct Difference<
-    'a,
-    T: 'a,
-    C,
-    A: Allocator + Clone = Global,
-> {
+pub struct Difference<'a, T: 'a, C, A: Allocator + Clone = Global> {
     inner: DifferenceInner<'a, T, C, A>,
     comparator: &'a C,
 }
@@ -204,18 +190,12 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DifferenceInner::Stitch {
-                self_iter,
-                other_iter,
-            } => f
+            DifferenceInner::Stitch { self_iter, other_iter } => f
                 .debug_struct("Stitch")
                 .field("self_iter", self_iter)
                 .field("other_iter", other_iter)
                 .finish(),
-            DifferenceInner::Search {
-                self_iter,
-                other_set,
-            } => f
+            DifferenceInner::Search { self_iter, other_set } => f
                 .debug_struct("Search")
                 .field("self_iter", self_iter)
                 .field("other_iter", other_set)
@@ -258,12 +238,7 @@ impl<T: fmt::Debug, C> fmt::Debug for SymmetricDifference<'_, T, C> {
 /// [`intersection`]: BTreeSet::intersection
 #[must_use = "this returns the intersection as an iterator, \
               without modifying either input set"]
-pub struct Intersection<
-    'a,
-    T: 'a,
-    C,
-    A: Allocator + Clone = Global,
-> {
+pub struct Intersection<'a, T: 'a, C, A: Allocator + Clone = Global> {
     inner: IntersectionInner<'a, T, C, A>,
     comparator: &'a C,
 }
@@ -288,15 +263,10 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            IntersectionInner::Stitch { a, b } => f
-                .debug_struct("Stitch")
-                .field("a", a)
-                .field("b", b)
-                .finish(),
-            IntersectionInner::Search {
-                small_iter,
-                large_set,
-            } => f
+            IntersectionInner::Stitch { a, b } => {
+                f.debug_struct("Stitch").field("a", a).field("b", b).finish()
+            }
+            IntersectionInner::Search { small_iter, large_set } => f
                 .debug_struct("Search")
                 .field("small_iter", small_iter)
                 .field("large_set", large_set)
@@ -354,7 +324,7 @@ impl<T, C> BTreeSet<T, C> {
     /// struct NthByteComparator {
     ///     n: usize, // runtime state
     /// }
-    /// 
+    ///
     /// impl Comparator for NthByteComparator {
     ///     // etc
     /// #     type Key = str;
@@ -367,7 +337,7 @@ impl<T, C> BTreeSet<T, C> {
     /// #         }
     /// #     }
     /// }
-    /// 
+    ///
     /// // define lookup key types for collections sorted by our comparator
     /// impl LookupKey<NthByteComparator> for String {
     ///     // etc
@@ -376,7 +346,7 @@ impl<T, C> BTreeSet<T, C> {
     /// # impl LookupKey<NthByteComparator> for str {
     /// #     fn key(&self) -> &str { self }
     /// # }
-    /// 
+    ///
     /// // create a set using our comparator
     /// let mut set = BTreeSet::new(NthByteComparator { n: 10 });
     ///
@@ -385,9 +355,7 @@ impl<T, C> BTreeSet<T, C> {
     /// ```
     #[must_use]
     pub const fn new(comparator: C) -> BTreeSet<T, C> {
-        BTreeSet {
-            map: BTreeMap::new(comparator),
-        }
+        BTreeSet { map: BTreeMap::new(comparator) }
     }
 }
 
@@ -410,9 +378,7 @@ where
     /// ```
     #[cfg(feature = "allocator_api")]
     pub fn new_in(comparator: C, alloc: A) -> BTreeSet<T, C, A> {
-        BTreeSet {
-            map: BTreeMap::new_in(comparator, alloc),
-        }
+        BTreeSet { map: BTreeMap::new_in(comparator, alloc) }
     }
 
     /// Constructs a double-ended iterator over a sub-range of elements in the set.
@@ -447,9 +413,7 @@ where
         K: LookupKey<C>,
         R: RangeBounds<K>,
     {
-        Range {
-            iter: self.map.range(range),
-        }
+        Range { iter: self.map.range(range) }
     }
 
     /// Visits the elements representing the difference,
@@ -508,10 +472,7 @@ where
                     DifferenceInner::Iterate(self_iter)
                 }
                 _ if self.len() <= other.len() / ITER_PERFORMANCE_TIPPING_SIZE_DIFF => {
-                    DifferenceInner::Search {
-                        self_iter: self.iter(),
-                        other_set: other,
-                    }
+                    DifferenceInner::Search { self_iter: self.iter(), other_set: other }
                 }
                 _ => DifferenceInner::Stitch {
                     self_iter: self.iter(),
@@ -546,10 +507,7 @@ where
         &'a self,
         other: &'a BTreeSet<T, C, A>,
     ) -> SymmetricDifference<'a, T, C> {
-        SymmetricDifference(
-            MergeIterInner::new(self.iter(), other.iter()),
-            &self.map.comparator,
-        )
+        SymmetricDifference(MergeIterInner::new(self.iter(), other.iter()), &self.map.comparator)
     }
 
     /// Visits the elements representing the intersection,
@@ -600,21 +558,12 @@ where
                 (Equal, _) => IntersectionInner::Answer(Some(self_min)),
                 (_, Equal) => IntersectionInner::Answer(Some(self_max)),
                 _ if self.len() <= other.len() / ITER_PERFORMANCE_TIPPING_SIZE_DIFF => {
-                    IntersectionInner::Search {
-                        small_iter: self.iter(),
-                        large_set: other,
-                    }
+                    IntersectionInner::Search { small_iter: self.iter(), large_set: other }
                 }
                 _ if other.len() <= self.len() / ITER_PERFORMANCE_TIPPING_SIZE_DIFF => {
-                    IntersectionInner::Search {
-                        small_iter: other.iter(),
-                        large_set: self,
-                    }
+                    IntersectionInner::Search { small_iter: other.iter(), large_set: self }
                 }
-                _ => IntersectionInner::Stitch {
-                    a: self.iter(),
-                    b: other.iter(),
-                },
+                _ => IntersectionInner::Stitch { a: self.iter(), b: other.iter() },
             },
             comparator: &self.map.comparator,
         }
@@ -639,10 +588,7 @@ where
     /// assert_eq!(union, [1, 2]);
     /// ```
     pub fn union<'a>(&'a self, other: &'a BTreeSet<T, C, A>) -> Union<'a, T, C> {
-        Union(
-            MergeIterInner::new(self.iter(), other.iter()),
-            &self.map.comparator,
-        )
+        Union(MergeIterInner::new(self.iter(), other.iter()), &self.map.comparator)
     }
 
     /// Returns `true` if the set contains an element equal to the value.
@@ -775,9 +721,10 @@ where
             other_iter.next_back();
             let mut self_next = self_iter.next();
             while let Some(self1) = self_next {
-                match other_iter.next().map_or(Less, |other1| {
-                    self.map.comparator.cmp(self1.key(), other1.key())
-                }) {
+                match other_iter
+                    .next()
+                    .map_or(Less, |other1| self.map.comparator.cmp(self1.key(), other1.key()))
+                {
                     Less => return false,
                     Equal => self_next = self_iter.next(),
                     Greater => (),
@@ -1084,9 +1031,7 @@ where
         C: Clone,
         Q: LookupKey<C>,
     {
-        BTreeSet {
-            map: self.map.split_off(value),
-        }
+        BTreeSet { map: self.map.split_off(value) }
     }
 
     /// Creates an iterator that visits all elements in ascending order and
@@ -1176,9 +1121,7 @@ impl<T, C, A: Allocator + Clone> BTreeSet<T, C, A> {
     /// assert_eq!(set_iter.next(), None);
     /// ```
     pub fn iter(&self) -> Iter<'_, T> {
-        Iter {
-            iter: self.map.keys(),
-        }
+        Iter { iter: self.map.keys() }
     }
 
     /// Returns the number of elements in the set.
@@ -1296,9 +1239,7 @@ impl<T, C, A: Allocator + Clone> IntoIterator for BTreeSet<T, C, A> {
     /// assert_eq!(v, [1, 2, 3, 4]);
     /// ```
     fn into_iter(self) -> IntoIter<T, A> {
-        IntoIter {
-            iter: self.map.into_iter(),
-        }
+        IntoIter { iter: self.map.into_iter() }
     }
 }
 
@@ -1315,12 +1256,8 @@ where
 }
 
 /// An iterator produced by calling `drain_filter` on BTreeSet.
-pub struct DrainFilter<
-    'a,
-    T,
-    F,
-    A: Allocator + Clone = Global,
-> where
+pub struct DrainFilter<'a, T, F, A: Allocator + Clone = Global>
+where
     T: 'a,
     F: 'a + FnMut(&T) -> bool,
 {
@@ -1345,9 +1282,7 @@ where
     F: FnMut(&T) -> bool,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("DrainFilter")
-            .field(&self.inner.peek().map(|(k, _)| k))
-            .finish()
+        f.debug_tuple("DrainFilter").field(&self.inner.peek().map(|(k, _)| k)).finish()
     }
 }
 
@@ -1360,9 +1295,7 @@ where
     fn next(&mut self) -> Option<T> {
         let pred = &mut self.pred;
         let mut mapped_pred = |k: &T, _v: &mut SetValZST| pred(k);
-        self.inner
-            .next(&mut mapped_pred, self.alloc.clone())
-            .map(|(k, _)| k)
+        self.inner.next(&mut mapped_pred, self.alloc.clone()).map(|(k, _)| k)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -1545,9 +1478,7 @@ impl<T: Debug, C, A: Allocator + Clone> Debug for BTreeSet<T, C, A> {
 
 impl<T> Clone for Iter<'_, T> {
     fn clone(&self) -> Self {
-        Iter {
-            iter: self.iter.clone(),
-        }
+        Iter { iter: self.iter.clone() }
     }
 }
 impl<'a, T> Iterator for Iter<'a, T> {
@@ -1650,20 +1581,13 @@ impl<T, C, A: Allocator + Clone> Clone for Difference<'_, T, C, A> {
     fn clone(&self) -> Self {
         Difference {
             inner: match &self.inner {
-                DifferenceInner::Stitch {
-                    self_iter,
-                    other_iter,
-                } => DifferenceInner::Stitch {
+                DifferenceInner::Stitch { self_iter, other_iter } => DifferenceInner::Stitch {
                     self_iter: self_iter.clone(),
                     other_iter: other_iter.clone(),
                 },
-                DifferenceInner::Search {
-                    self_iter,
-                    other_set,
-                } => DifferenceInner::Search {
-                    self_iter: self_iter.clone(),
-                    other_set,
-                },
+                DifferenceInner::Search { self_iter, other_set } => {
+                    DifferenceInner::Search { self_iter: self_iter.clone(), other_set }
+                }
                 DifferenceInner::Iterate(iter) => DifferenceInner::Iterate(iter.clone()),
             },
             comparator: self.comparator,
@@ -1679,10 +1603,7 @@ where
 
     fn next(&mut self) -> Option<&'a T> {
         match &mut self.inner {
-            DifferenceInner::Stitch {
-                self_iter,
-                other_iter,
-            } => {
+            DifferenceInner::Stitch { self_iter, other_iter } => {
                 let mut self_next = self_iter.next()?;
                 loop {
                     match other_iter.peek().map_or(Less, |&other_next| {
@@ -1699,10 +1620,7 @@ where
                     }
                 }
             }
-            DifferenceInner::Search {
-                self_iter,
-                other_set,
-            } => loop {
+            DifferenceInner::Search { self_iter, other_set } => loop {
                 let self_next = self_iter.next()?;
                 if !other_set.contains(self_next) {
                     return Some(self_next);
@@ -1714,14 +1632,10 @@ where
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         let (self_len, other_len) = match &self.inner {
-            DifferenceInner::Stitch {
-                self_iter,
-                other_iter,
-            } => (self_iter.len(), other_iter.len()),
-            DifferenceInner::Search {
-                self_iter,
-                other_set,
-            } => (self_iter.len(), other_set.len()),
+            DifferenceInner::Stitch { self_iter, other_iter } => {
+                (self_iter.len(), other_iter.len())
+            }
+            DifferenceInner::Search { self_iter, other_set } => (self_iter.len(), other_set.len()),
             DifferenceInner::Iterate(iter) => (iter.len(), 0),
         };
         (self_len.saturating_sub(other_len), Some(self_len))
@@ -1784,17 +1698,12 @@ impl<T, C: Clone, A: Allocator + Clone> Clone for Intersection<'_, T, C, A> {
     fn clone(&self) -> Self {
         Intersection {
             inner: match &self.inner {
-                IntersectionInner::Stitch { a, b } => IntersectionInner::Stitch {
-                    a: a.clone(),
-                    b: b.clone(),
-                },
-                IntersectionInner::Search {
-                    small_iter,
-                    large_set,
-                } => IntersectionInner::Search {
-                    small_iter: small_iter.clone(),
-                    large_set,
-                },
+                IntersectionInner::Stitch { a, b } => {
+                    IntersectionInner::Stitch { a: a.clone(), b: b.clone() }
+                }
+                IntersectionInner::Search { small_iter, large_set } => {
+                    IntersectionInner::Search { small_iter: small_iter.clone(), large_set }
+                }
                 IntersectionInner::Answer(answer) => IntersectionInner::Answer(*answer),
             },
             comparator: self.comparator,
@@ -1821,10 +1730,7 @@ where
                     }
                 }
             }
-            IntersectionInner::Search {
-                small_iter,
-                large_set,
-            } => loop {
+            IntersectionInner::Search { small_iter, large_set } => loop {
                 let small_next = small_iter.next()?;
                 if large_set.contains(small_next) {
                     return Some(small_next);
