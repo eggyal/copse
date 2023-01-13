@@ -276,9 +276,11 @@ mod definitions {
                     $vis $($rest)+
                 } else if #[cfg($const)] {
                     $(#[$attr])*
+                    #[allow(dead_code)]
                     pub(crate) const $($rest)+
                 } else {
                     $(#[$attr])*
+                    #[allow(dead_code)]
                     pub(crate) $($rest)+
                 }
             }
@@ -314,6 +316,7 @@ mod definitions {
                     $vis $($rest)+
                 } else {
                     $(#[$attr])*
+                    #[allow(dead_code)]
                     pub(crate) $($rest)+
                 }
             }
