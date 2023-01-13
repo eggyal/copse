@@ -2,7 +2,7 @@
 //! [`BTreeSet`][std::collections::BTreeSet] collections, but which sort according to a specified
 //! [`Comparator`] rather than relying upon the [`Ord`] trait.
 //!
-//! This is primarily useful when the [`Comparator`] is not defined until runtime, and therefore
+//! This is primarily useful when the [`Comparator`] depends upon runtime state, and therefore
 //! cannot be provided as an [`Ord`] implementation for any type.
 //!
 //! # Lookup keys
