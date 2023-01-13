@@ -1,0 +1,151 @@
+name: Pull upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0/6 * * *'
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  main:
+    permissions:
+      contents: write
+      pull-requests: write
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    env:
+      SPLITSH_REPOSITORY: splitsh/lite
+      SPLITSH_RELEASE: v1.0.1
+      RUST_REPOSITORY: rust-lang/rust
+      RUST_BRANCH: master
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Get SHA of ${{ env.RUST_REPOSITORY }} repository's ${{ env.RUST_BRANCH }} branch
+        id: new-sha
+        run: >
+          curl
+          --silent
+          --location
+          --header 'Accept: application/vnd.github+json'
+          --header 'X-GitHub-Api-Version: 2022-11-28'
+          '${{ github.api_url }}/repos/${{ env.RUST_REPOSITORY }}/branches/${{ env.RUST_BRANCH }}'
+          | jq -r .commit.sha
+          | xargs -n1 printf sha=%s
+          > "$GITHUB_OUTPUT"
+
+      - name: Determine whether a cached ${{ env.RUST_REPOSITORY }} mirror exists for SHA ${{ steps.new-sha.outputs.sha }}
+        id: cache-lookup
+        run: >
+          curl
+          --silent
+          --location
+          --header 'Accept: application/vnd.github+json'
+          --header 'X-GitHub-Api-Version: 2022-11-28'
+          '${{ github.api_url }}/repos/${{ github.repository }}/actions/caches?key=${{ env.RUST_REPOSITORY }}-${{ steps.new-sha.outputs.sha }}'
+          | jq -r '.total_count > 0'
+          | xargs -n1 printf exists=%s
+          > "$GITHUB_OUTPUT"
+
+      - name: Restore cached ${{ env.RUST_REPOSITORY }} mirror for SHA ${{ steps.new-sha.outputs.sha }}
+        if: steps.cache-lookup.outputs.exists != 'true'
+        id: cache-restore
+        uses: actions/cache@v3
+        with:
+          path: ${{ github.workspace }}
+          key: ${{ env.RUST_REPOSITORY }}-${{ steps.new-sha.outputs.sha }}
+          restore-keys: ${{ env.RUST_REPOSITORY }}-
+          enableCrossOsArchive: true
+
+      - name: Get SHA of ${{ env.RUST_REPOSITORY }} mirror's ${{ env.RUST_BRANCH }} branch
+        if: steps.cache-lookup.outputs.exists != 'true'
+        id: old-sha
+        run: >
+          git rev-parse 'refs/source/${{ env.RUST_REPOSITORY }}/${{ env.RUST_BRANCH }}'
+          | xargs -n1 printf sha=%s
+          > "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      - name: Initialise ${{ env.RUST_REPOSITORY }} mirror
+        if: steps.cache-lookup.outputs.exists != 'true' && steps.old-sha.outcome == 'failure'
+        run: |
+          git init -q
+          git config --local remote.origin.url '${{ github.server_url }}/${{ github.repository }}.git'
+
+      - name: Update ${{ env.RUST_REPOSITORY }} mirror to SHA ${{ steps.new-sha.outputs.sha }}
+        if: steps.cache-lookup.outputs.exists != 'true'
+        run: >
+          git fetch --force --no-tags --no-write-fetch-head --no-recurse-submodules --no-show-forced-updates
+          '${{ github.server_url }}/${{ env.RUST_REPOSITORY }}.git'
+          '${{ steps.new-sha.outputs.sha }}:refs/source/${{ env.RUST_REPOSITORY }}/${{ env.RUST_BRANCH }}'
+
+      - name: Download splitsh binary
+        if: steps.cache-lookup.outputs.exists != 'true' && steps.cache-splitshlite-binary.outputs.cache-hit != 'true'
+        id: splitsh
+        run: >
+          curl
+          --silent
+          --location
+          --header 'Accept: application/vnd.github+json'
+          --header 'X-GitHub-Api-Version: 2022-11-28'
+          '${{ github.api_url }}/repos/${{ env.SPLITSH_REPOSITORY }}/releases/tags/${{ env.SPLITSH_RELEASE }}'
+          | jq -r '.assets[] | select(.name == "lite_linux_amd64.tar.gz").browser_download_url'
+          | xargs -n1 curl --silent --location
+          | tar --gunzip --extract --strip-components=1 --directory="$HOME" --verbose 2>&1
+          | xargs -n1 printf bin=%s
+          > "$GITHUB_OUTPUT"
+
+      - name: Split tree
+        if: steps.cache-lookup.outputs.exists != 'true'
+        id: split-liballoc-btree
+        run: >
+          "${HOME}/${{ steps.splitsh.outputs.bin }}"
+          --origin='refs/source/${{ env.RUST_REPOSITORY }}/${{ env.RUST_BRANCH }}'
+          --prefix=library/alloc/src/collections/binary_heap:collections/binary_heap
+          --prefix=library/alloc/src/collections/btree:collections/btree
+          --prefix=library/alloc/src/testing:testing
+          $(
+          ${{ steps.old-sha.outcome == 'success' }}
+          && (( $(git rev-list --count '${{ steps.new-sha.outputs.sha }}..${{ steps.old-sha.outputs.sha }}') ))
+          && printf %s '--scratch'
+          )
+          | xargs -n1 printf sha=%s
+          > "$GITHUB_OUTPUT"
+
+      - name: Fetch origin's ${{ github.ref_name }} branch
+        if: steps.cache-lookup.outputs.exists != 'true'
+        run: >
+          git fetch --no-tags --no-write-fetch-head --no-recurse-submodules --no-show-forced-updates
+          origin
+          '${{ github.ref }}:refs/remotes/origin/${{ github.ref_name }}'
+
+      - name: Checkout split
+        if: steps.cache-lookup.outputs.exists != 'true'
+        run: git checkout --force -B '${{ github.ref_name }}' '${{ steps.split-liballoc-btree.outputs.sha }}'
+
+      - name: Create pull request
+        if: steps.cache-lookup.outputs.exists != 'true'
+        uses: peter-evans/create-pull-request@v4
+        with:
+          branch: create-pull-request/update-liballoc
+          title: liballoc updated upstream
+          body: |
+            Relevant updates to liballoc have been merged upstream.
+
+            **DO NOT MERGE THIS PULL REQUEST!**  Instead, in your local repo:
+
+            ```text
+            git pull -Xsubtree=src/liballoc ${{ github.repositoryUrl }} refs/pull/id/head
+            ```
+            where `id` is the number of this pull request.
+
+            Once any merge conflicts have been resolved and all tests are passing, *create a new PR*
+            (ideally with a message linking to this one); once that new PR is merged, this PR will
+            automatically close.
+          labels: upstream/liballoc, subtree-merge-request
+          assignees: eggyal
+          draft: true
