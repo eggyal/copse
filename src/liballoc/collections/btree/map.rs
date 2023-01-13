@@ -572,9 +572,9 @@ impl<K, V, C> BTreeMap<K, V, C> {
     ///
     /// impl Comparator for NthByteComparator {
     ///     // etc
-    /// #     type Key = str;
-    /// #     fn cmp(&self, this: &str, that: &str) -> Ordering {
-    /// #         match (this.as_bytes().get(self.n), that.as_bytes().get(self.n)) {
+    /// #     type Key = [u8];
+    /// #     fn cmp(&self, this: &[u8], that: &[u8]) -> Ordering {
+    /// #         match (this.get(self.n), that.get(self.n)) {
     /// #             (Some(lhs), Some(rhs)) => lhs.cmp(rhs),
     /// #             (Some(_), None) => Ordering::Greater,
     /// #             (None, Some(_)) => Ordering::Less,
@@ -584,16 +584,19 @@ impl<K, V, C> BTreeMap<K, V, C> {
     /// }
     ///
     /// // define lookup key types for collections sorted by our comparator
+    /// # impl LookupKey<NthByteComparator> for [u8] {
+    /// #     fn key(&self) -> &[u8] { self }
+    /// # }
+    /// # impl LookupKey<NthByteComparator> for str {
+    /// #     fn key(&self) -> &[u8] { self.as_bytes() }
+    /// # }
     /// impl LookupKey<NthByteComparator> for String {
     ///     // etc
-    /// #     fn key(&self) -> &str { self.as_str() }
+    /// #     fn key(&self) -> &[u8] { LookupKey::<NthByteComparator>::key(self.as_str()) }
     /// }
-    /// # impl LookupKey<NthByteComparator> for str {
-    /// #     fn key(&self) -> &str { self }
-    /// # }
     ///
     /// // create a map using our comparator
-    /// let mut map = BTreeMap::new(NthByteComparator { n: 10 });
+    /// let mut map = BTreeMap::new(NthByteComparator { n: 9 });
     ///
     /// // entries can now be inserted into the empty map
     /// assert!(map.insert("abcdefghij".to_string(), ()).is_none());

@@ -28,9 +28,9 @@
 //! }
 //!
 //! impl Comparator for NthByteComparator {
-//!     type Key = str;
-//!     fn cmp(&self, this: &str, that: &str) -> Ordering {
-//!         match (this.as_bytes().get(self.n), that.as_bytes().get(self.n)) {
+//!     type Key = [u8];
+//!     fn cmp(&self, this: &[u8], that: &[u8]) -> Ordering {
+//!         match (this.get(self.n), that.get(self.n)) {
 //!             (Some(lhs), Some(rhs)) => lhs.cmp(rhs),
 //!             (Some(_), None) => Ordering::Greater,
 //!             (None, Some(_)) => Ordering::Less,
@@ -40,17 +40,20 @@
 //! }
 //!
 //! // define lookup key types for collections sorted by our comparator
-//! impl LookupKey<NthByteComparator> for String {
-//!     fn key(&self) -> &str { self.as_str() }
+//! impl LookupKey<NthByteComparator> for [u8] {
+//!     fn key(&self) -> &[u8] { self }
 //! }
 //! impl LookupKey<NthByteComparator> for str {
-//!     fn key(&self) -> &str { self }
+//!     fn key(&self) -> &[u8] { self.as_bytes() }
+//! }
+//! impl LookupKey<NthByteComparator> for String {
+//!     fn key(&self) -> &[u8] { LookupKey::<NthByteComparator>::key(self.as_str()) }
 //! }
 //!
 //! // create a collection using our comparator
-//! let mut set = BTreeSet::new(NthByteComparator { n: 10 });
-//! assert!(set.insert("abcdefghij".to_string()));
-//! assert!(!set.insert("xxxxxxxxxj".to_string()));
+//! let mut set = BTreeSet::new(NthByteComparator { n: 9 });
+//! assert!(set.insert("abcdefghijklm".to_string()));
+//! assert!(!set.insert("xxxxxxxxxjxx".to_string()));
 //! assert!(set.contains("jjjjjjjjjj"));
 //! ```
 //!

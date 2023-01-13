@@ -1,7 +1,7 @@
 // This is pretty much entirely stolen from TreeSet, since BTreeMap has an identical interface
 // to TreeMap
 
-use crate::{Comparator, LookupKey, OrdComparator};
+use crate::{Comparator, LookupKey, OrdComparator, OrdStoredKey};
 use alloc::vec::Vec;
 use core::cmp::Ordering::{self, Equal, Greater, Less};
 use core::cmp::{max, min};
@@ -75,7 +75,11 @@ use crate::polyfill::*;
 ///
 /// let set = BTreeSet::from([1, 2, 3]);
 /// ```
-pub struct BTreeSet<T, C = OrdComparator<T>, A: Allocator + Clone = Global> {
+pub struct BTreeSet<
+    T,
+    C = OrdComparator<<T as OrdStoredKey>::DefaultComparisonKey>,
+    A: Allocator + Clone = Global,
+> {
     map: BTreeMap<T, SetValZST, C, A>,
 }
 
@@ -314,9 +318,9 @@ impl<T, C> BTreeSet<T, C> {
     ///
     /// impl Comparator for NthByteComparator {
     ///     // etc
-    /// #     type Key = str;
-    /// #     fn cmp(&self, this: &str, that: &str) -> Ordering {
-    /// #         match (this.as_bytes().get(self.n), that.as_bytes().get(self.n)) {
+    /// #     type Key = [u8];
+    /// #     fn cmp(&self, this: &[u8], that: &[u8]) -> Ordering {
+    /// #         match (this.get(self.n), that.get(self.n)) {
     /// #             (Some(lhs), Some(rhs)) => lhs.cmp(rhs),
     /// #             (Some(_), None) => Ordering::Greater,
     /// #             (None, Some(_)) => Ordering::Less,
@@ -326,18 +330,21 @@ impl<T, C> BTreeSet<T, C> {
     /// }
     ///
     /// // define lookup key types for collections sorted by our comparator
+    /// # impl LookupKey<NthByteComparator> for [u8] {
+    /// #     fn key(&self) -> &[u8] { self }
+    /// # }
+    /// # impl LookupKey<NthByteComparator> for str {
+    /// #     fn key(&self) -> &[u8] { self.as_bytes() }
+    /// # }
     /// impl LookupKey<NthByteComparator> for String {
     ///     // etc
-    /// #     fn key(&self) -> &str { self.as_str() }
+    /// #     fn key(&self) -> &[u8] { LookupKey::<NthByteComparator>::key(self.as_str()) }
     /// }
-    /// # impl LookupKey<NthByteComparator> for str {
-    /// #     fn key(&self) -> &str { self }
-    /// # }
     ///
     /// // create a set using our comparator
-    /// let mut set = BTreeSet::new(NthByteComparator { n: 10 });
+    /// let mut set = BTreeSet::new(NthByteComparator { n: 9 });
     ///
-    /// // entries can now be inserted into the empty map
+    /// // entries can now be inserted into the empty set
     /// assert!(set.insert("abcdefghij".to_string()));
     /// ```
     #[must_use]
@@ -353,45 +360,17 @@ impl<T, C, A: Allocator + Clone> BTreeSet<T, C, A> {
             ///
             /// # Examples
             ///
+            /// Basic usage:
+            ///
             /// ```
-            /// #![feature(allocator_api)]
-            ///
+            /// # #![feature(allocator_api)]
+            /// use copse::{BTreeSet, OrdComparator};
             /// use std::alloc::Global;
-            /// # use core::cmp::Ordering;
-            /// # use copse::{BTreeSet, Comparator, LookupKey, OrdComparator};
-            /// #
-            /// // define a comparator
-            /// struct NthByteComparator {
-            ///     n: usize, // runtime state
-            /// }
             ///
-            /// impl Comparator for NthByteComparator {
-            ///     // etc
-            /// #     type Key = str;
-            /// #     fn cmp(&self, this: &str, that: &str) -> Ordering {
-            /// #         match (this.as_bytes().get(self.n), that.as_bytes().get(self.n)) {
-            /// #             (Some(lhs), Some(rhs)) => lhs.cmp(rhs),
-            /// #             (Some(_), None) => Ordering::Greater,
-            /// #             (None, Some(_)) => Ordering::Less,
-            /// #             (None, None) => Ordering::Equal,
-            /// #         }
-            /// #     }
-            /// }
+            /// let mut set = BTreeSet::<_>::new_in(OrdComparator::default(), Global);
             ///
-            /// // define lookup key types for collections sorted by our comparator
-            /// impl LookupKey<NthByteComparator> for String {
-            ///     // etc
-            /// #     fn key(&self) -> &str { self.as_str() }
-            /// }
-            /// # impl LookupKey<NthByteComparator> for str {
-            /// #     fn key(&self) -> &str { self }
-            /// # }
-            ///
-            /// // create a set using our comparator
-            /// let mut set = BTreeSet::new_in(NthByteComparator { n: 10 }, Global);
-            ///
-            /// // entries can now be inserted into the empty map
-            /// assert!(set.insert("abcdefghij".to_string()));
+            /// // entries can now be inserted into the empty set
+            /// set.insert("a".to_string());
             /// ```
             pub
         }
