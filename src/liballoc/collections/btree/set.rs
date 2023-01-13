@@ -1,8 +1,8 @@
 // This is pretty much entirely stolen from TreeSet, since BTreeMap has an identical interface
 // to TreeMap
 
-use alloc::vec::Vec;
 use crate::{Comparator, LookupKey, OrdComparator};
+use alloc::vec::Vec;
 use core::cmp::Ordering::{self, Equal, Greater, Less};
 use core::cmp::{max, min};
 use core::fmt::{self, Debug};
