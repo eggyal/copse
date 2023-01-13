@@ -588,78 +588,78 @@ fn assert_covariance() {
 
 #[allow(dead_code)]
 fn assert_sync() {
-    fn set<T: Sync + Ord>(v: &BTreeSet<T>) -> impl Sync + '_ {
+    fn set<T: Sync + OrdStoredKey>(v: &BTreeSet<T>) -> impl Sync + '_ {
         v
     }
 
-    fn iter<T: Sync + Ord>(v: &BTreeSet<T>) -> impl Sync + '_ {
+    fn iter<T: Sync + OrdStoredKey>(v: &BTreeSet<T>) -> impl Sync + '_ {
         v.iter()
     }
 
-    fn into_iter<T: Sync + Ord>(v: BTreeSet<T>) -> impl Sync {
+    fn into_iter<T: Sync + OrdStoredKey>(v: BTreeSet<T>) -> impl Sync {
         v.into_iter()
     }
 
-    fn range<T: Sync + Ord>(v: &BTreeSet<T>) -> impl Sync + '_ {
+    fn range<T: Sync + OrdStoredKey>(v: &BTreeSet<T>) -> impl Sync + '_ {
         v.range::<T, _>(..)
     }
 
-    fn drain_filter<T: Sync + Ord>(v: &mut BTreeSet<T>) -> impl Sync + '_ {
+    fn drain_filter<T: Sync + OrdStoredKey>(v: &mut BTreeSet<T>) -> impl Sync + '_ {
         v.drain_filter(|_| false)
     }
 
-    fn difference<T: Sync + Ord>(v: &BTreeSet<T>) -> impl Sync + '_ {
+    fn difference<T: Sync + OrdStoredKey>(v: &BTreeSet<T>) -> impl Sync + '_ {
         v.difference(&v)
     }
 
-    fn intersection<T: Sync + Ord>(v: &BTreeSet<T>) -> impl Sync + '_ {
+    fn intersection<T: Sync + OrdStoredKey>(v: &BTreeSet<T>) -> impl Sync + '_ {
         v.intersection(&v)
     }
 
-    fn symmetric_difference<T: Sync + Ord>(v: &BTreeSet<T>) -> impl Sync + '_ {
+    fn symmetric_difference<T: Sync + OrdStoredKey>(v: &BTreeSet<T>) -> impl Sync + '_ {
         v.symmetric_difference(&v)
     }
 
-    fn union<T: Sync + Ord>(v: &BTreeSet<T>) -> impl Sync + '_ {
+    fn union<T: Sync + OrdStoredKey>(v: &BTreeSet<T>) -> impl Sync + '_ {
         v.union(&v)
     }
 }
 
 #[allow(dead_code)]
 fn assert_send() {
-    fn set<T: Send + Ord>(v: BTreeSet<T>) -> impl Send {
+    fn set<T: Send + OrdStoredKey>(v: BTreeSet<T>) -> impl Send {
         v
     }
 
-    fn iter<T: Send + Sync + Ord>(v: &BTreeSet<T>) -> impl Send + '_ {
+    fn iter<T: Send + Sync + OrdStoredKey>(v: &BTreeSet<T>) -> impl Send + '_ {
         v.iter()
     }
 
-    fn into_iter<T: Send + Ord>(v: BTreeSet<T>) -> impl Send {
+    fn into_iter<T: Send + OrdStoredKey>(v: BTreeSet<T>) -> impl Send {
         v.into_iter()
     }
 
-    fn range<T: Send + Sync + Ord>(v: &BTreeSet<T>) -> impl Send + '_ {
+    fn range<T: Send + Sync + OrdStoredKey>(v: &BTreeSet<T>) -> impl Send + '_ {
         v.range::<T, _>(..)
     }
 
-    fn drain_filter<T: Send + Ord>(v: &mut BTreeSet<T>) -> impl Send + '_ {
+    fn drain_filter<T: Send + OrdStoredKey>(v: &mut BTreeSet<T>) -> impl Send + '_ {
         v.drain_filter(|_| false)
     }
 
-    fn difference<T: Send + Sync + Ord>(v: &BTreeSet<T>) -> impl Send + '_ {
+    fn difference<T: Send + Sync + OrdStoredKey>(v: &BTreeSet<T>) -> impl Send + '_ {
         v.difference(&v)
     }
 
-    fn intersection<T: Send + Sync + Ord>(v: &BTreeSet<T>) -> impl Send + '_ {
+    fn intersection<T: Send + Sync + OrdStoredKey>(v: &BTreeSet<T>) -> impl Send + '_ {
         v.intersection(&v)
     }
 
-    fn symmetric_difference<T: Send + Sync + Ord>(v: &BTreeSet<T>) -> impl Send + '_ {
+    fn symmetric_difference<T: Send + Sync + OrdStoredKey>(v: &BTreeSet<T>) -> impl Send + '_ {
         v.symmetric_difference(&v)
     }
 
-    fn union<T: Send + Sync + Ord>(v: &BTreeSet<T>) -> impl Send + '_ {
+    fn union<T: Send + Sync + OrdStoredKey>(v: &BTreeSet<T>) -> impl Send + '_ {
         v.union(&v)
     }
 }
@@ -668,29 +668,29 @@ fn assert_send() {
 // Check that the member-like functions conditionally provided by #[derive()]
 // are not overridden by genuine member functions with a different signature.
 fn assert_derives() {
-    fn hash<T: Hash + Ord, H: Hasher>(v: BTreeSet<T>, state: &mut H) {
+    fn hash<T: Hash + OrdStoredKey, H: Hasher>(v: BTreeSet<T>, state: &mut H) {
         v.hash(state);
         // Tested much more thoroughly outside the crate in btree_set_hash.rs
     }
-    fn eq<T: Ord>(v: BTreeSet<T>) {
+    fn eq<T: Ord + OrdStoredKey>(v: BTreeSet<T>) {
         let _ = v.eq(&v);
     }
-    fn ne<T: Ord>(v: BTreeSet<T>) {
+    fn ne<T: Ord + OrdStoredKey>(v: BTreeSet<T>) {
         let _ = v.ne(&v);
     }
-    fn cmp<T: Ord>(v: BTreeSet<T>) {
+    fn cmp<T: Ord + OrdStoredKey>(v: BTreeSet<T>) {
         let _ = v.cmp(&v);
     }
-    fn min<T: Ord>(v: BTreeSet<T>, w: BTreeSet<T>) {
+    fn min<T: Ord + OrdStoredKey>(v: BTreeSet<T>, w: BTreeSet<T>) {
         let _ = v.min(w);
     }
-    fn max<T: Ord>(v: BTreeSet<T>, w: BTreeSet<T>) {
+    fn max<T: Ord + OrdStoredKey>(v: BTreeSet<T>, w: BTreeSet<T>) {
         let _ = v.max(w);
     }
-    fn clamp<T: Ord>(v: BTreeSet<T>, w: BTreeSet<T>, x: BTreeSet<T>) {
+    fn clamp<T: Ord + OrdStoredKey>(v: BTreeSet<T>, w: BTreeSet<T>, x: BTreeSet<T>) {
         let _ = v.clamp(w, x);
     }
-    fn partial_cmp<T: Ord>(v: &BTreeSet<T>) {
+    fn partial_cmp<T: Ord + OrdStoredKey>(v: &BTreeSet<T>) {
         let _ = v.partial_cmp(&v);
     }
 }
