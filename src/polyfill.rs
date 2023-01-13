@@ -276,10 +276,10 @@ mod definitions {
                     $vis $($rest)+
                 } else if #[cfg($const)] {
                     $(#[$attr])*
-                    const $($rest)+
+                    pub(crate) const $($rest)+
                 } else {
                     $(#[$attr])*
-                    $($rest)+
+                    pub(crate) $($rest)+
                 }
             }
         };
@@ -314,7 +314,7 @@ mod definitions {
                     $vis $($rest)+
                 } else {
                     $(#[$attr])*
-                    $($rest)+
+                    pub(crate) $($rest)+
                 }
             }
         };
