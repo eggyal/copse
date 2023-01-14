@@ -8,6 +8,71 @@ edition = "2021"
 keywords = ["b-tree", "collections", "map", "set", "runtime"]
 categories = ["data-structures", "no-std"]
 
+[features]
+allocator_api = []
+btreemap_alloc = ["allocator_api"]
+core_intrinsics = []
+dropck_eyepatch = []
+error_in_core = []
+exact_size_is_empty = []
+exclusive_range_pattern = []
+extend_one = []
+hasher_prefixfree_extras = []
+inline_const = []
+inplace_iteration = []
+maybe_uninit_slice = []
+new_uninit = []
+rustc_attrs = []
+slice_ptr_get = []
+specialization = []
+trusted_len = []
+nightly = [
+    "allocator_api",
+    "btreemap_alloc",
+    "core_intrinsics",
+    "dropck_eyepatch",
+    "error_in_core",
+    "exact_size_is_empty",
+    "exclusive_range_pattern",
+    "extend_one",
+    "hasher_prefixfree_extras",
+    "inline_const",
+    "inplace_iteration",
+    "maybe_uninit_slice",
+    "new_uninit",
+    "rustc_attrs",
+    "slice_ptr_get",
+    "specialization",
+    "trusted_len",
+]
+
+binary_heap_as_slice = []
+binary_heap_drain_sorted = []
+binary_heap_into_iter_sorted = []
+binary_heap_retain = []
+btree_drain_filter = []
+const_btree_len = []
+const_btree_new = ["const_btree_len"]
+map_try_insert = []
+unstable = [
+    "binary_heap_as_slice",
+    "binary_heap_drain_sorted",
+    "binary_heap_into_iter_sorted",
+    "binary_heap_retain",
+    "btree_drain_filter",
+    "const_btree_new",
+    "map_try_insert",
+]
+
+std = []
+
+[dependencies]
+cfg-if = "1.0.0"
+
+[dev-dependencies]
+rand = { version = "0.8.5", default-features = false, features = ["alloc"] }
+rand_xorshift = "0.3.0"
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
