@@ -139,7 +139,7 @@ jobs:
             **DO NOT MERGE THIS PULL REQUEST!**  Instead, in your local repo:
 
             ```text
-            git pull -Xsubtree=src/liballoc ${{ github.repositoryUrl }} refs/pull/id/head
+            git pull --no-ff -Xsubtree=src/liballoc '${{ github.server_url }}/${{ github.repository }}.git' refs/pull/id/head
             ```
             where `id` is the number of this pull request.
 
