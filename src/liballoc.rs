@@ -1,7 +1,6 @@
 #![allow(
     clippy::clone_on_copy,
     clippy::drop_non_drop,
-    clippy::let_unit_value,
     clippy::needless_borrow,
     clippy::type_complexity,
     clippy::unnecessary_mut_passed,

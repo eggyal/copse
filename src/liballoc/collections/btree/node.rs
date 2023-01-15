@@ -31,6 +31,7 @@
 //   since leaf edges are empty and need no data representation. In an internal node,
 //   an edge both identifies a position and contains a pointer to a child node.
 
+use cfg_if::cfg_if;
 use core::marker::PhantomData;
 use core::mem::{self, MaybeUninit};
 use core::ptr::{self, NonNull};
@@ -319,7 +320,16 @@ impl<BorrowType: marker::BorrowType, K, V, Type> NodeRef<BorrowType, K, V, Type>
     pub fn ascend(
         self,
     ) -> Result<Handle<NodeRef<BorrowType, K, V, marker::Internal>, marker::Edge>, Self> {
-        let _ = BorrowType::TRAVERSAL_PERMIT;
+        cfg_if! {
+            if #[cfg(feature = "inline_const")] {
+                const {
+                    assert!(BorrowType::TRAVERSAL_PERMIT);
+                }
+            } else {
+                let _ = BorrowType::TRAVERSAL_PERMIT;
+            }
+        }
+
         // We need to use raw pointers to nodes because, if BorrowType is marker::ValMut,
         // there might be outstanding mutable references to values that we must not invalidate.
         let leaf_ptr: *const _ = Self::as_leaf_ptr(&self);
@@ -1010,7 +1020,16 @@ impl<BorrowType: marker::BorrowType, K, V>
     /// `edge.descend().ascend().unwrap()` and `node.ascend().unwrap().descend()` should
     /// both, upon success, do nothing.
     pub fn descend(self) -> NodeRef<BorrowType, K, V, marker::LeafOrInternal> {
-        let _ = BorrowType::TRAVERSAL_PERMIT;
+        cfg_if! {
+            if #[cfg(feature = "inline_const")] {
+                const {
+                    assert!(BorrowType::TRAVERSAL_PERMIT);
+                }
+            } else {
+                let _ = BorrowType::TRAVERSAL_PERMIT;
+            }
+        }
+
         // We need to use raw pointers to nodes because, if BorrowType is
         // marker::ValMut, there might be outstanding mutable references to
         // values that we must not invalidate. There's no worry accessing the
@@ -1673,17 +1692,17 @@ pub mod marker {
     pub struct ValMut<'a>(PhantomData<&'a mut ()>);
 
     pub trait BorrowType {
-        // If node references of this borrow type allow traversing to other
-        // nodes in the tree, this constant can be evaluated. Thus reading it
-        // serves as a compile-time assertion.
-        const TRAVERSAL_PERMIT: () = ();
+        /// If node references of this borrow type allow traversing to other
+        /// nodes in the tree, this constant is set to `true`. It can be used
+        /// for a compile-time assertion.
+        const TRAVERSAL_PERMIT: bool = true;
     }
     impl BorrowType for Owned {
-        // Reject evaluation, because traversal isn't needed. Instead traversal
-        // happens using the result of `borrow_mut`.
-        // By disabling traversal, and only creating new references to roots,
-        // we know that every reference of the `Owned` type is to a root node.
-        const TRAVERSAL_PERMIT: () = panic!();
+        /// Reject traversal, because it isn't needed. Instead traversal
+        /// happens using the result of `borrow_mut`.
+        /// By disabling traversal, and only creating new references to roots,
+        /// we know that every reference of the `Owned` type is to a root node.
+        const TRAVERSAL_PERMIT: bool = false;
     }
     impl BorrowType for Dying {}
     impl<'a> BorrowType for Immut<'a> {}
