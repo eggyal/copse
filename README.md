@@ -1,6 +1,7 @@
-Direct ports of the standard library's [`BTreeMap`][std::collections::BTreeMap] and
-[`BTreeSet`][std::collections::BTreeSet] collections, but which sort according to a specified
-[`Comparator`] rather than relying upon the [`Ord`] trait.
+Direct ports of the standard library's [`BTreeMap`][std::collections::BTreeMap],
+[`BTreeSet`][std::collections::BTreeSet] and [`BinaryHeap`][std::collections::BinaryHeap]
+collections, but which sort according to a specified [`Comparator`] rather than relying upon
+the [`Ord`] trait.
 
 This is primarily useful when the [`Comparator`] is not defined until runtime, and therefore
 cannot be provided as an [`Ord`] implementation for any type.
@@ -66,9 +67,9 @@ This crate defines a number of feature flags, none of which are enabled by defau
 * the `std` feature provides [`OrdStoredKey`] implementations for some libstd types
   that are not available in libcore + liballoc, namely [`OsString`] and [`PathBuf`];
 
-* the `unstable` feature enables all unstable features of the stdlib's BTree collection
-  implementations that are purely contained therein, and which therefore do not require
-  a nightly toolchain.
+* the `unstable` feature enables all unstable features of the stdlib's BTree and
+  BinaryHeap collection implementations that are purely contained therein, and which
+  therefore do not require a nightly toolchain.
 
 * the `btreemap_alloc` feature enables the like-named unstable compiler feature, thus
   exposing the collections' `new_in` methods; however this feature depends upon the
@@ -83,6 +84,7 @@ This crate defines a number of feature flags, none of which are enabled by defau
 
 [std::collections::BTreeMap]: https://doc.rust-lang.org/std/collections/struct.BTreeMap.html
 [std::collections::BTreeSet]: https://doc.rust-lang.org/std/collections/struct.BTreeSet.html
+[std::collections::BinaryHeap]: https://doc.rust-lang.org/std/collections/struct.BinaryHeap.html
 [`Ord`]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 [`Borrow`]: https://doc.rust-lang.org/std/borrow/trait.Borrow.html
 [`Borrow<Q>`]: https://doc.rust-lang.org/std/borrow/trait.Borrow.html

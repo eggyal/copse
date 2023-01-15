@@ -287,7 +287,7 @@ impl<'a, K, V, C, A: Allocator + Clone> VacantEntry<'a, K, V, C, A> {
     ///
     /// ```
     /// use copse::BTreeMap;
-    /// use copse::map::Entry;
+    /// use copse::btree_map::Entry;
     ///
     /// let mut map: BTreeMap<&str, usize> = BTreeMap::default();
     ///
@@ -306,7 +306,7 @@ impl<'a, K, V, C, A: Allocator + Clone> VacantEntry<'a, K, V, C, A> {
     ///
     /// ```
     /// use copse::BTreeMap;
-    /// use copse::map::Entry;
+    /// use copse::btree_map::Entry;
     ///
     /// let mut map: BTreeMap<&str, u32> = BTreeMap::default();
     ///
@@ -374,7 +374,7 @@ impl<'a, K, V, C, A: Allocator + Clone> OccupiedEntry<'a, K, V, C, A> {
     ///
     /// ```
     /// use copse::BTreeMap;
-    /// use copse::map::Entry;
+    /// use copse::btree_map::Entry;
     ///
     /// let mut map: BTreeMap<&str, usize> = BTreeMap::default();
     /// map.entry("poneyland").or_insert(12);
@@ -397,7 +397,7 @@ impl<'a, K, V, C, A: Allocator + Clone> OccupiedEntry<'a, K, V, C, A> {
     ///
     /// ```
     /// use copse::BTreeMap;
-    /// use copse::map::Entry;
+    /// use copse::btree_map::Entry;
     ///
     /// let mut map: BTreeMap<&str, usize> = BTreeMap::default();
     /// map.entry("poneyland").or_insert(12);
@@ -422,7 +422,7 @@ impl<'a, K, V, C, A: Allocator + Clone> OccupiedEntry<'a, K, V, C, A> {
     ///
     /// ```
     /// use copse::BTreeMap;
-    /// use copse::map::Entry;
+    /// use copse::btree_map::Entry;
     ///
     /// let mut map: BTreeMap<&str, usize> = BTreeMap::default();
     /// map.entry("poneyland").or_insert(12);
@@ -451,7 +451,7 @@ impl<'a, K, V, C, A: Allocator + Clone> OccupiedEntry<'a, K, V, C, A> {
     ///
     /// ```
     /// use copse::BTreeMap;
-    /// use copse::map::Entry;
+    /// use copse::btree_map::Entry;
     ///
     /// let mut map: BTreeMap<&str, usize> = BTreeMap::default();
     /// map.entry("poneyland").or_insert(12);
@@ -474,7 +474,7 @@ impl<'a, K, V, C, A: Allocator + Clone> OccupiedEntry<'a, K, V, C, A> {
     ///
     /// ```
     /// use copse::BTreeMap;
-    /// use copse::map::Entry;
+    /// use copse::btree_map::Entry;
     ///
     /// let mut map: BTreeMap<&str, usize> = BTreeMap::default();
     /// map.entry("poneyland").or_insert(12);
@@ -494,7 +494,7 @@ impl<'a, K, V, C, A: Allocator + Clone> OccupiedEntry<'a, K, V, C, A> {
     ///
     /// ```
     /// use copse::BTreeMap;
-    /// use copse::map::Entry;
+    /// use copse::btree_map::Entry;
     ///
     /// let mut map: BTreeMap<&str, usize> = BTreeMap::default();
     /// map.entry("poneyland").or_insert(12);

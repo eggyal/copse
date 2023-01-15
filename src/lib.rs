@@ -1,6 +1,7 @@
-//! Direct ports of the standard library's [`BTreeMap`][std::collections::BTreeMap] and
-//! [`BTreeSet`][std::collections::BTreeSet] collections, but which sort according to a specified
-//! [`Comparator`] rather than relying upon the [`Ord`] trait.
+//! Direct ports of the standard library's [`BTreeMap`][std::collections::BTreeMap],
+//! [`BTreeSet`][std::collections::BTreeSet] and [`BinaryHeap`][std::collections::BinaryHeap]
+//! collections, but which sort according to a specified [`Comparator`] rather than relying upon
+//! the [`Ord`] trait.
 //!
 //! This is primarily useful when the [`Comparator`] is not defined until runtime, and therefore
 //! cannot be provided as an [`Ord`] implementation for any type.
@@ -69,9 +70,9 @@
 //! * the `std` feature provides [`OrdStoredKey`] implementations for some libstd types
 //!   that are not available in libcore + liballoc, namely [`OsString`] and [`PathBuf`];
 //!
-//! * the `unstable` feature enables all unstable features of the stdlib's BTree collection
-//!   implementations that are purely contained therein, and which therefore do not require
-//!   a nightly toolchain.
+//! * the `unstable` feature enables all unstable features of the stdlib's BTree and
+//!   BinaryHeap collection implementations that are purely contained therein, and which
+//!   therefore do not require a nightly toolchain.
 //!
 //! * the `btreemap_alloc` feature enables the like-named unstable compiler feature, thus
 //!   exposing the collections' `new_in` methods; however this feature depends upon the
@@ -100,17 +101,21 @@
 #![cfg_attr(feature = "exclusive_range_pattern", feature(exclusive_range_pattern))]
 #![cfg_attr(feature = "extend_one", feature(extend_one))]
 #![cfg_attr(feature = "hasher_prefixfree_extras", feature(hasher_prefixfree_extras))]
+#![cfg_attr(feature = "inline_const", feature(inline_const))]
+#![cfg_attr(feature = "inplace_iteration", feature(inplace_iteration))]
 #![cfg_attr(feature = "maybe_uninit_slice", feature(maybe_uninit_slice))]
 #![cfg_attr(feature = "new_uninit", feature(new_uninit))]
 #![cfg_attr(feature = "rustc_attrs", feature(rustc_attrs))]
 #![cfg_attr(feature = "slice_ptr_get", feature(slice_ptr_get))]
 #![cfg_attr(feature = "specialization", feature(specialization))]
+#![cfg_attr(feature = "trusted_len", feature(trusted_len))]
 // documentation controls
 #![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg))]
 #![deny(missing_docs)]
 // linting controls
 #![cfg_attr(feature = "specialization", allow(incomplete_features))]
 
+#[macro_use]
 extern crate alloc;
 
 use alloc::{boxed::Box, vec::Vec};
@@ -121,15 +126,19 @@ mod polyfill;
 
 // port of stdlib implementation
 mod liballoc;
-pub use liballoc::collections::{btree_map as map, btree_set as set};
+pub use liballoc::collections::{binary_heap, btree_map, btree_set};
 
 #[cfg(not(no_global_oom_handling))]
 #[doc(no_inline)]
-pub use map::BTreeMap;
+pub use binary_heap::BinaryHeap;
 
 #[cfg(not(no_global_oom_handling))]
 #[doc(no_inline)]
-pub use set::BTreeSet;
+pub use btree_map::BTreeMap;
+
+#[cfg(not(no_global_oom_handling))]
+#[doc(no_inline)]
+pub use btree_set::BTreeSet;
 
 /// A comparator defines a total order over its associated type `Key`.
 pub trait Comparator {
