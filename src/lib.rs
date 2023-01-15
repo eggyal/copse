@@ -123,7 +123,7 @@
 extern crate alloc;
 
 use alloc::{boxed::Box, vec::Vec};
-use core::{cmp::Ordering, marker::PhantomData};
+use core::{borrow::Borrow, cmp::Ordering, marker::PhantomData};
 
 #[macro_use]
 mod polyfill;
@@ -208,28 +208,29 @@ impl<T: ?Sized + Ord> Copy for OrdComparator<T> {}
 
 impl<T: ?Sized + Ord> Comparator for OrdComparator<T> {
     type Key = T;
+
     fn cmp(&self, this: &T, that: &T) -> Ordering {
         this.cmp(that)
     }
 
-    fn eq(&self, this: &Self::Key, that: &Self::Key) -> bool {
-        this.eq(that)
+    fn eq(&self, this: &T, that: &T) -> bool {
+        this == that
     }
-    fn ne(&self, this: &Self::Key, that: &Self::Key) -> bool {
-        this.ne(that)
+    fn ne(&self, this: &T, that: &T) -> bool {
+        this != that
     }
 
-    fn ge(&self, this: &Self::Key, that: &Self::Key) -> bool {
-        this.ge(that)
+    fn ge(&self, this: &T, that: &T) -> bool {
+        this >= that
     }
-    fn gt(&self, this: &Self::Key, that: &Self::Key) -> bool {
-        this.gt(that)
+    fn gt(&self, this: &T, that: &T) -> bool {
+        this > that
     }
-    fn le(&self, this: &Self::Key, that: &Self::Key) -> bool {
-        this.le(that)
+    fn le(&self, this: &T, that: &T) -> bool {
+        this <= that
     }
-    fn lt(&self, this: &Self::Key, that: &Self::Key) -> bool {
-        this.lt(that)
+    fn lt(&self, this: &T, that: &T) -> bool {
+        this < that
     }
 }
 
@@ -246,13 +247,9 @@ pub trait LookupKey<C: Comparator> {
     fn key(&self) -> &C::Key;
 }
 
-impl<K, T> LookupKey<OrdComparator<T>> for K
-where
-    K: ?Sized + core::borrow::Borrow<T>,
-    T: ?Sized + Ord,
-{
+impl<T: ?Sized + Ord, K: ?Sized + Borrow<T>> LookupKey<OrdComparator<T>> for K {
     fn key(&self) -> &T {
-        core::borrow::Borrow::borrow(self)
+        self.borrow()
     }
 }
 
