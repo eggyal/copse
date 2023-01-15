@@ -20,6 +20,7 @@ extend_one = []
 hasher_prefixfree_extras = []
 inline_const = []
 inplace_iteration = []
+is_sorted = []
 maybe_uninit_slice = []
 new_uninit = []
 rustc_attrs = []
@@ -38,6 +39,7 @@ nightly = [
     "hasher_prefixfree_extras",
     "inline_const",
     "inplace_iteration",
+    "is_sorted",
     "maybe_uninit_slice",
     "new_uninit",
     "rustc_attrs",
