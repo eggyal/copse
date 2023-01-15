@@ -106,6 +106,7 @@
 #![cfg_attr(feature = "hasher_prefixfree_extras", feature(hasher_prefixfree_extras))]
 #![cfg_attr(feature = "inline_const", feature(inline_const))]
 #![cfg_attr(feature = "inplace_iteration", feature(inplace_iteration))]
+#![cfg_attr(feature = "is_sorted", feature(is_sorted))]
 #![cfg_attr(feature = "maybe_uninit_slice", feature(maybe_uninit_slice))]
 #![cfg_attr(feature = "new_uninit", feature(new_uninit))]
 #![cfg_attr(feature = "rustc_attrs", feature(rustc_attrs))]

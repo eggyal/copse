@@ -7,7 +7,7 @@ mod definitions {
     use alloc::alloc::Layout;
     use alloc::boxed::Box;
     use cfg_if::cfg_if;
-    use core::mem::MaybeUninit;
+    use core::{cmp::Ordering, mem::MaybeUninit};
 
     cfg_if! {
         if #[cfg(feature = "allocator_api")] {
@@ -258,6 +258,78 @@ mod definitions {
     #[cfg(not(feature = "exact_size_is_empty"))]
     impl<I: ExactSizeIterator> ExactSizeIsEmpty for I {}
 
+    pub trait SliceIsSorted {
+        type Element;
+
+        fn is_sorted(&self) -> bool
+        where
+            Self::Element: PartialOrd,
+        {
+            self.is_sorted_by(PartialOrd::partial_cmp)
+        }
+
+        fn is_sorted_by<'a, F>(&'a self, compare: F) -> bool
+        where
+            F: FnMut(&'a Self::Element, &'a Self::Element) -> Option<Ordering>;
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    pub trait IterIsSorted: Iterator {
+        fn is_sorted(self) -> bool
+        where
+            Self: Sized,
+            Self::Item: PartialOrd,
+        {
+            IterIsSorted::is_sorted_by(self, PartialOrd::partial_cmp)
+        }
+
+        fn is_sorted_by<F>(self, compare: F) -> bool
+        where
+            Self: Sized,
+            F: FnMut(&Self::Item, &Self::Item) -> Option<Ordering>;
+    }
+
+    #[cfg(not(feature = "is_sorted"))]
+    impl<T> SliceIsSorted for [T] {
+        type Element = T;
+
+        fn is_sorted_by<'a, F>(&'a self, mut compare: F) -> bool
+        where
+            F: FnMut(&'a T, &'a T) -> Option<Ordering>,
+        {
+            self.iter().is_sorted_by(|a, b| compare(*a, *b))
+        }
+    }
+
+    #[cfg(not(feature = "is_sorted"))]
+    impl<I: Iterator> IterIsSorted for I {
+        fn is_sorted_by<F>(mut self, compare: F) -> bool
+        where
+            F: FnMut(&I::Item, &I::Item) -> Option<Ordering>,
+        {
+            #[inline]
+            fn check<'a, T>(
+                last: &'a mut T,
+                mut compare: impl FnMut(&T, &T) -> Option<Ordering> + 'a,
+            ) -> impl FnMut(T) -> bool + 'a {
+                move |curr| {
+                    if let Some(Ordering::Greater) | None = compare(&last, &curr) {
+                        return false;
+                    }
+                    *last = curr;
+                    true
+                }
+            }
+
+            let mut last = match self.next() {
+                Some(e) => e,
+                None => return true,
+            };
+
+            self.all(check(&mut last, compare))
+        }
+    }
+
     macro_rules! decorate_if {
         (
             $(#[$attr:meta])*
@@ -326,9 +398,9 @@ mod definitions {
     }
 }
 
-#[cfg(test)]
-pub(crate) use definitions::ExactSizeIsEmpty as _;
 pub(crate) use definitions::{
     intrinsics, Allocator, AssumeInit as _, Global, Hasher as _, MaybeUninitSlice as _,
     NewUninit as _, SlicePtrGet as _, SlicePtrGetMut as _,
 };
+#[cfg(test)]
+pub(crate) use definitions::{ExactSizeIsEmpty as _, SliceIsSorted as _};

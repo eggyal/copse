@@ -149,6 +149,7 @@ use core::iter::{FromIterator, FusedIterator};
 #[cfg(feature = "inplace_iteration")]
 use core::iter::{InPlaceIterable, SourceIter};
 use core::mem::{self, swap, ManuallyDrop};
+use core::num::NonZeroUsize;
 use core::ops::{Deref, DerefMut};
 use core::ptr;
 
@@ -170,11 +171,19 @@ mod tests;
 /// It is a logic error for an item to be modified in such a way that the
 /// item's ordering relative to any other item, as determined by the [`Ord`]
 /// trait, changes while it is in the heap. This is normally only possible
-/// through [`Cell`], [`RefCell`], global state, I/O, or unsafe code. The
+/// through interior mutability, global state, I/O, or unsafe code. The
 /// behavior resulting from such a logic error is not specified, but will
 /// be encapsulated to the `BinaryHeap` that observed the logic error and not
 /// result in undefined behavior. This could include panics, incorrect results,
 /// aborts, memory leaks, and non-termination.
+///
+/// As long as no elements change their relative order while being in the heap
+/// as described above, the API of `BinaryHeap` guarantees that the heap
+/// invariant remains intact i.e. its methods all behave as documented. For
+/// example if a method is documented as iterating in sorted order, that's
+/// guaranteed to work as long as elements in the heap have not changed order,
+/// even in the presence of closures getting unwinded out of, iterators getting
+/// leaked, and similar foolishness.
 ///
 /// # Examples
 ///
@@ -286,7 +295,9 @@ pub struct PeekMut<
     C: Comparator = OrdComparator<<T as OrdStoredKey>::DefaultComparisonKey>,
 > {
     heap: &'a mut BinaryHeap<T, C>,
-    sift: bool,
+    // If a set_len + sift_down are required, this is Some. If a &mut T has not
+    // yet been exposed to peek_mut()'s caller, it's None.
+    original_len: Option<NonZeroUsize>,
 }
 
 impl<T: LookupKey<C> + fmt::Debug, C: Comparator> fmt::Debug for PeekMut<'_, T, C> {
@@ -297,7 +308,14 @@ impl<T: LookupKey<C> + fmt::Debug, C: Comparator> fmt::Debug for PeekMut<'_, T, 
 
 impl<T: LookupKey<C>, C: Comparator> Drop for PeekMut<'_, T, C> {
     fn drop(&mut self) {
-        if self.sift {
+        if let Some(original_len) = self.original_len {
+            // SAFETY: That's how many elements were in the Vec at the time of
+            // the PeekMut::deref_mut call, and therefore also at the time of
+            // the BinaryHeap::peek_mut call. Since the PeekMut did not end up
+            // getting leaked, we are now undoing the leak amplification that
+            // the DerefMut prepared for.
+            unsafe { self.heap.data.set_len(original_len.get()) };
+
             // SAFETY: PeekMut is only instantiated for non-empty heaps.
             unsafe { self.heap.sift_down(0) };
         }
@@ -316,7 +334,26 @@ impl<T: LookupKey<C>, C: Comparator> Deref for PeekMut<'_, T, C> {
 impl<T: LookupKey<C>, C: Comparator> DerefMut for PeekMut<'_, T, C> {
     fn deref_mut(&mut self) -> &mut T {
         debug_assert!(!self.heap.is_empty());
-        self.sift = true;
+
+        let len = self.heap.len();
+        if len > 1 {
+            // Here we preemptively leak all the rest of the underlying vector
+            // after the currently max element. If the caller mutates the &mut T
+            // we're about to give them, and then leaks the PeekMut, all these
+            // elements will remain leaked. If they don't leak the PeekMut, then
+            // either Drop or PeekMut::pop will un-leak the vector elements.
+            //
+            // This is technique is described throughout several other places in
+            // the standard library as "leak amplification".
+            unsafe {
+                // SAFETY: len > 1 so len != 0.
+                self.original_len = Some(NonZeroUsize::new_unchecked(len));
+                // SAFETY: len > 1 so all this does for now is leak elements,
+                // which is safe.
+                self.heap.data.set_len(1);
+            }
+        }
+
         // SAFE: PeekMut is only instantiated for non-empty heaps
         unsafe { self.heap.data.get_unchecked_mut(0) }
     }
@@ -325,9 +362,16 @@ impl<T: LookupKey<C>, C: Comparator> DerefMut for PeekMut<'_, T, C> {
 impl<'a, T: LookupKey<C>, C: Comparator> PeekMut<'a, T, C> {
     /// Removes the peeked value from the heap and returns it.
     pub fn pop(mut this: PeekMut<'a, T, C>) -> T {
-        let value = this.heap.pop().unwrap();
-        this.sift = false;
-        value
+        if let Some(original_len) = this.original_len.take() {
+            // SAFETY: This is how many elements were in the Vec at the time of
+            // the BinaryHeap::peek_mut call.
+            unsafe { this.heap.data.set_len(original_len.get()) };
+
+            // Unlike in Drop, here we don't also need to do a sift_down even if
+            // the caller could've mutated the element. It is removed from the
+            // heap on the next line and pop() is not sensitive to its value.
+        }
+        this.heap.pop().unwrap()
     }
 }
 
@@ -395,8 +439,9 @@ impl<T: LookupKey<C>, C: Comparator> BinaryHeap<T, C> {
     /// Returns a mutable reference to the greatest item in the binary heap, or
     /// `None` if it is empty.
     ///
-    /// Note: If the `PeekMut` value is leaked, the heap may be in an
-    /// inconsistent state.
+    /// Note: If the `PeekMut` value is leaked, some heap elements might get
+    /// leaked along with it, but the remaining elements will remain a valid
+    /// heap.
     ///
     /// # Examples
     ///
@@ -422,7 +467,7 @@ impl<T: LookupKey<C>, C: Comparator> BinaryHeap<T, C> {
     /// If the item is modified then the worst case time complexity is *O*(log(*n*)),
     /// otherwise it's *O*(1).
     pub fn peek_mut(&mut self) -> Option<PeekMut<'_, T, C>> {
-        if self.is_empty() { None } else { Some(PeekMut { heap: self, sift: false }) }
+        if self.is_empty() { None } else { Some(PeekMut { heap: self, original_len: None }) }
     }
 
     /// Removes the greatest item from the binary heap and returns it, or `None` if it

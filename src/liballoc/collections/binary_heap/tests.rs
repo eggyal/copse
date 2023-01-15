@@ -1,6 +1,8 @@
 use super::*;
 use crate::liballoc::testing::crash_test::{CrashTestDummy, Panic};
+use crate::polyfill::*;
 use alloc::boxed::Box;
+use core::mem;
 #[cfg(feature = "trusted_len")]
 use std::iter::TrustedLen;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -152,6 +154,24 @@ fn test_peek_mut() {
         *top -= 2;
     }
     assert_eq!(heap.peek(), Some(&9));
+}
+
+#[test]
+fn test_peek_mut_leek() {
+    let data = vec![4, 2, 7];
+    let mut heap = BinaryHeap::from(data);
+    let mut max = heap.peek_mut().unwrap();
+    *max = -1;
+
+    // The PeekMut object's Drop impl would have been responsible for moving the
+    // -1 out of the max position of the BinaryHeap, but we don't run it.
+    mem::forget(max);
+
+    // Absent some mitigation like leak amplification, the -1 would incorrectly
+    // end up in the last position of the returned Vec, with the rest of the
+    // heap's original contents in front of it in sorted order.
+    let sorted_vec = heap.into_sorted_vec();
+    assert!(sorted_vec.is_sorted(), "{:?}", sorted_vec);
 }
 
 #[test]
