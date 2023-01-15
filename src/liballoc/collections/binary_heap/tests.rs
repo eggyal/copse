@@ -253,19 +253,19 @@ fn test_in_place_iterator_specialization() {
 
 #[test]
 fn test_empty_pop() {
-    let mut heap = BinaryHeap::<i32>::new();
+    let mut heap = BinaryHeap::<i32>::default();
     assert!(heap.pop().is_none());
 }
 
 #[test]
 fn test_empty_peek() {
-    let empty = BinaryHeap::<i32>::new();
+    let empty = BinaryHeap::<i32>::default();
     assert!(empty.peek().is_none());
 }
 
 #[test]
 fn test_empty_peek_mut() {
-    let mut empty = BinaryHeap::<i32>::new();
+    let mut empty = BinaryHeap::<i32>::default();
     assert!(empty.peek_mut().is_none());
 }
 
@@ -384,7 +384,7 @@ fn test_drain_sorted_forget() {
 
 #[test]
 fn test_extend_ref() {
-    let mut a = BinaryHeap::new();
+    let mut a = BinaryHeap::default();
     a.push(1);
     a.push(2);
 
@@ -393,10 +393,10 @@ fn test_extend_ref() {
     assert_eq!(a.len(), 5);
     assert_eq!(a.into_sorted_vec(), [1, 2, 3, 4, 5]);
 
-    let mut a = BinaryHeap::new();
+    let mut a = BinaryHeap::default();
     a.push(1);
     a.push(2);
-    let mut b = BinaryHeap::new();
+    let mut b = BinaryHeap::default();
     b.push(3);
     b.push(4);
     b.push(5);
@@ -420,7 +420,7 @@ fn test_append() {
 
 #[test]
 fn test_append_to_empty() {
-    let mut a = BinaryHeap::new();
+    let mut a = BinaryHeap::default();
     let mut b = BinaryHeap::from(vec![-20, 5, 43]);
 
     a.append(&mut b);

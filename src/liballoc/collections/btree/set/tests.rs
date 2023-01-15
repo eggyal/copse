@@ -10,7 +10,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 
 #[test]
 fn test_clone_eq() {
-    let mut m = BTreeSet::new();
+    let mut m = BTreeSet::default();
 
     m.insert(1);
     m.insert(2);
@@ -20,31 +20,31 @@ fn test_clone_eq() {
 
 #[test]
 fn test_iter_min_max() {
-    let mut a = BTreeSet::new();
+    let mut a = BTreeSet::default();
     assert_eq!(a.iter().min(), None);
     assert_eq!(a.iter().max(), None);
-    assert_eq!(a.range(..).min(), None);
-    assert_eq!(a.range(..).max(), None);
-    assert_eq!(a.difference(&BTreeSet::new()).min(), None);
-    assert_eq!(a.difference(&BTreeSet::new()).max(), None);
+    assert_eq!(a.range::<i32, _>(..).min(), None);
+    assert_eq!(a.range::<i32, _>(..).max(), None);
+    assert_eq!(a.difference(&BTreeSet::default()).min(), None);
+    assert_eq!(a.difference(&BTreeSet::default()).max(), None);
     assert_eq!(a.intersection(&a).min(), None);
     assert_eq!(a.intersection(&a).max(), None);
-    assert_eq!(a.symmetric_difference(&BTreeSet::new()).min(), None);
-    assert_eq!(a.symmetric_difference(&BTreeSet::new()).max(), None);
+    assert_eq!(a.symmetric_difference(&BTreeSet::default()).min(), None);
+    assert_eq!(a.symmetric_difference(&BTreeSet::default()).max(), None);
     assert_eq!(a.union(&a).min(), None);
     assert_eq!(a.union(&a).max(), None);
     a.insert(1);
     a.insert(2);
     assert_eq!(a.iter().min(), Some(&1));
     assert_eq!(a.iter().max(), Some(&2));
-    assert_eq!(a.range(..).min(), Some(&1));
-    assert_eq!(a.range(..).max(), Some(&2));
-    assert_eq!(a.difference(&BTreeSet::new()).min(), Some(&1));
-    assert_eq!(a.difference(&BTreeSet::new()).max(), Some(&2));
+    assert_eq!(a.range::<i32, _>(..).min(), Some(&1));
+    assert_eq!(a.range::<i32, _>(..).max(), Some(&2));
+    assert_eq!(a.difference(&BTreeSet::default()).min(), Some(&1));
+    assert_eq!(a.difference(&BTreeSet::default()).max(), Some(&2));
     assert_eq!(a.intersection(&a).min(), Some(&1));
     assert_eq!(a.intersection(&a).max(), Some(&2));
-    assert_eq!(a.symmetric_difference(&BTreeSet::new()).min(), Some(&1));
-    assert_eq!(a.symmetric_difference(&BTreeSet::new()).max(), Some(&2));
+    assert_eq!(a.symmetric_difference(&BTreeSet::default()).min(), Some(&1));
+    assert_eq!(a.symmetric_difference(&BTreeSet::default()).max(), Some(&2));
     assert_eq!(a.union(&a).min(), Some(&1));
     assert_eq!(a.union(&a).max(), Some(&2));
 }
@@ -53,8 +53,8 @@ fn check<F>(a: &[i32], b: &[i32], expected: &[i32], f: F)
 where
     F: FnOnce(&BTreeSet<i32>, &BTreeSet<i32>, &mut dyn FnMut(&i32) -> bool) -> bool,
 {
-    let mut set_a = BTreeSet::new();
-    let mut set_b = BTreeSet::new();
+    let mut set_a = BTreeSet::default();
+    let mut set_b = BTreeSet::default();
 
     for x in a {
         assert!(set_a.insert(*x))
@@ -286,7 +286,7 @@ fn test_is_disjoint() {
 // Also implicitly tests the trivial function definition of is_superset
 fn test_is_subset() {
     fn is_subset(a: &[i32], b: &[i32]) -> bool {
-        let set_a = BTreeSet::from_iter(a.iter());
+        let set_a = BTreeSet::<_, OrdComparator<i32>>::from_iter(a.iter());
         let set_b = BTreeSet::from_iter(b.iter());
         set_a.is_subset(&set_b)
     }
@@ -323,7 +323,7 @@ fn test_is_subset() {
 #[test]
 fn test_is_superset() {
     fn is_superset(a: &[i32], b: &[i32]) -> bool {
-        let set_a = BTreeSet::from_iter(a.iter());
+        let set_a = BTreeSet::<_, OrdComparator<i32>>::from_iter(a.iter());
         let set_b = BTreeSet::from_iter(b.iter());
         set_a.is_superset(&set_b)
     }
@@ -382,7 +382,7 @@ fn test_drain_filter_drop_panic_leak() {
     let a = CrashTestDummy::new(0);
     let b = CrashTestDummy::new(1);
     let c = CrashTestDummy::new(2);
-    let mut set = BTreeSet::new();
+    let mut set = BTreeSet::default();
     set.insert(a.spawn(Panic::Never));
     set.insert(b.spawn(Panic::InDrop));
     set.insert(c.spawn(Panic::Never));
@@ -402,7 +402,7 @@ fn test_drain_filter_pred_panic_leak() {
     let a = CrashTestDummy::new(0);
     let b = CrashTestDummy::new(1);
     let c = CrashTestDummy::new(2);
-    let mut set = BTreeSet::new();
+    let mut set = BTreeSet::default();
     set.insert(a.spawn(Panic::Never));
     set.insert(b.spawn(Panic::InQuery));
     set.insert(c.spawn(Panic::InQuery));
@@ -422,7 +422,7 @@ fn test_drain_filter_pred_panic_leak() {
 
 #[test]
 fn test_clear() {
-    let mut x = BTreeSet::new();
+    let mut x = BTreeSet::default();
     x.insert(1);
 
     x.clear();
@@ -430,7 +430,7 @@ fn test_clear() {
 }
 #[test]
 fn test_remove() {
-    let mut x = BTreeSet::new();
+    let mut x = BTreeSet::default();
     assert!(x.is_empty());
 
     x.insert(1);
@@ -451,12 +451,12 @@ fn test_remove() {
 
 #[test]
 fn test_zip() {
-    let mut x = BTreeSet::new();
+    let mut x = BTreeSet::default();
     x.insert(5);
     x.insert(12);
     x.insert(11);
 
-    let mut y = BTreeSet::new();
+    let mut y = BTreeSet::<_, OrdComparator<str>>::default();
     y.insert("foo");
     y.insert("bar");
 
@@ -473,7 +473,7 @@ fn test_zip() {
 fn test_from_iter() {
     let xs = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
-    let set = BTreeSet::from_iter(xs.iter());
+    let set = BTreeSet::<_, OrdComparator<i32>>::from_iter(xs.iter());
 
     for x in &xs {
         assert!(set.contains(x));
@@ -482,8 +482,8 @@ fn test_from_iter() {
 
 #[test]
 fn test_show() {
-    let mut set = BTreeSet::new();
-    let empty = BTreeSet::<i32>::new();
+    let mut set = BTreeSet::default();
+    let empty = BTreeSet::<i32>::default();
 
     set.insert(1);
     set.insert(2);
@@ -496,7 +496,7 @@ fn test_show() {
 
 #[test]
 fn test_extend_ref() {
-    let mut a = BTreeSet::new();
+    let mut a = BTreeSet::default();
     a.insert(1);
 
     a.extend(&[2, 3, 4]);
@@ -507,7 +507,7 @@ fn test_extend_ref() {
     assert!(a.contains(&3));
     assert!(a.contains(&4));
 
-    let mut b = BTreeSet::new();
+    let mut b = BTreeSet::default();
     b.insert(5);
     b.insert(6);
 
@@ -547,7 +547,7 @@ fn test_recovery() {
         }
     }
 
-    let mut s = BTreeSet::new();
+    let mut s = BTreeSet::default();
     assert_eq!(s.replace(Foo("a", 1)), None);
     assert_eq!(s.len(), 1);
     assert_eq!(s.replace(Foo("a", 2)), Some(Foo("a", 1)));
@@ -571,7 +571,7 @@ fn test_recovery() {
 
 #[allow(dead_code)]
 fn assert_covariance() {
-    fn set<'new>(v: BTreeSet<&'static str>) -> BTreeSet<&'new str> {
+    fn set<'new>(v: BTreeSet<&'static str, ()>) -> BTreeSet<&'new str, ()> {
         v
     }
     fn iter<'a, 'new>(v: Iter<'a, &'static str>) -> Iter<'a, &'new str> {
@@ -588,20 +588,20 @@ fn assert_covariance() {
 
 #[allow(dead_code)]
 fn assert_sync() {
-    fn set<T: Sync>(v: &BTreeSet<T>) -> impl Sync + '_ {
+    fn set<T: Sync + Ord>(v: &BTreeSet<T>) -> impl Sync + '_ {
         v
     }
 
-    fn iter<T: Sync>(v: &BTreeSet<T>) -> impl Sync + '_ {
+    fn iter<T: Sync + Ord>(v: &BTreeSet<T>) -> impl Sync + '_ {
         v.iter()
     }
 
-    fn into_iter<T: Sync>(v: BTreeSet<T>) -> impl Sync {
+    fn into_iter<T: Sync + Ord>(v: BTreeSet<T>) -> impl Sync {
         v.into_iter()
     }
 
     fn range<T: Sync + Ord>(v: &BTreeSet<T>) -> impl Sync + '_ {
-        v.range(..)
+        v.range::<T, _>(..)
     }
 
     fn drain_filter<T: Sync + Ord>(v: &mut BTreeSet<T>) -> impl Sync + '_ {
@@ -627,20 +627,20 @@ fn assert_sync() {
 
 #[allow(dead_code)]
 fn assert_send() {
-    fn set<T: Send>(v: BTreeSet<T>) -> impl Send {
+    fn set<T: Send + Ord>(v: BTreeSet<T>) -> impl Send {
         v
     }
 
-    fn iter<T: Send + Sync>(v: &BTreeSet<T>) -> impl Send + '_ {
+    fn iter<T: Send + Sync + Ord>(v: &BTreeSet<T>) -> impl Send + '_ {
         v.iter()
     }
 
-    fn into_iter<T: Send>(v: BTreeSet<T>) -> impl Send {
+    fn into_iter<T: Send + Ord>(v: BTreeSet<T>) -> impl Send {
         v.into_iter()
     }
 
     fn range<T: Send + Sync + Ord>(v: &BTreeSet<T>) -> impl Send + '_ {
-        v.range(..)
+        v.range::<T, _>(..)
     }
 
     fn drain_filter<T: Send + Ord>(v: &mut BTreeSet<T>) -> impl Send + '_ {
@@ -668,14 +668,14 @@ fn assert_send() {
 // Check that the member-like functions conditionally provided by #[derive()]
 // are not overridden by genuine member functions with a different signature.
 fn assert_derives() {
-    fn hash<T: Hash, H: Hasher>(v: BTreeSet<T>, state: &mut H) {
+    fn hash<T: Hash + Ord, H: Hasher>(v: BTreeSet<T>, state: &mut H) {
         v.hash(state);
         // Tested much more thoroughly outside the crate in btree_set_hash.rs
     }
-    fn eq<T: PartialEq>(v: BTreeSet<T>) {
+    fn eq<T: Ord>(v: BTreeSet<T>) {
         let _ = v.eq(&v);
     }
-    fn ne<T: PartialEq>(v: BTreeSet<T>) {
+    fn ne<T: Ord>(v: BTreeSet<T>) {
         let _ = v.ne(&v);
     }
     fn cmp<T: Ord>(v: BTreeSet<T>) {
@@ -690,14 +690,14 @@ fn assert_derives() {
     fn clamp<T: Ord>(v: BTreeSet<T>, w: BTreeSet<T>, x: BTreeSet<T>) {
         let _ = v.clamp(w, x);
     }
-    fn partial_cmp<T: PartialOrd>(v: &BTreeSet<T>) {
+    fn partial_cmp<T: Ord>(v: &BTreeSet<T>) {
         let _ = v.partial_cmp(&v);
     }
 }
 
 #[test]
 fn test_ord_absence() {
-    fn set<K>(mut set: BTreeSet<K>) {
+    fn set<K, C: Copy>(mut set: BTreeSet<K, C>) {
         let _ = set.is_empty();
         let _ = set.len();
         set.clear();
@@ -705,31 +705,31 @@ fn test_ord_absence() {
         let _ = set.into_iter();
     }
 
-    fn set_debug<K: Debug>(set: BTreeSet<K>) {
+    fn set_debug<K: Debug, C>(set: BTreeSet<K, C>) {
         format!("{set:?}");
         format!("{:?}", set.iter());
         format!("{:?}", set.into_iter());
     }
 
-    fn set_clone<K: Clone>(mut set: BTreeSet<K>) {
+    fn set_clone<K: Clone, C: Clone>(mut set: BTreeSet<K, C>) {
         set.clone_from(&set.clone());
     }
 
     #[derive(Debug, Clone)]
     struct NonOrd;
-    set(BTreeSet::<NonOrd>::new());
-    set_debug(BTreeSet::<NonOrd>::new());
-    set_clone(BTreeSet::<NonOrd>::default());
+    set(BTreeSet::<NonOrd, _>::new(()));
+    set_debug(BTreeSet::<NonOrd, _>::new(()));
+    set_clone(BTreeSet::<NonOrd, _>::new(()));
 }
 
 #[test]
 fn test_append() {
-    let mut a = BTreeSet::new();
+    let mut a = BTreeSet::default();
     a.insert(1);
     a.insert(2);
     a.insert(3);
 
-    let mut b = BTreeSet::new();
+    let mut b = BTreeSet::default();
     b.insert(3);
     b.insert(4);
     b.insert(5);
@@ -748,7 +748,7 @@ fn test_append() {
 
 #[test]
 fn test_first_last() {
-    let mut a = BTreeSet::new();
+    let mut a = BTreeSet::default();
     assert_eq!(a.first(), None);
     assert_eq!(a.last(), None);
     a.insert(1);
@@ -843,12 +843,12 @@ fn from_array() {
 )]
 #[test]
 fn test_range_panic_1() {
-    let mut set = BTreeSet::new();
+    let mut set = BTreeSet::default();
     set.insert(3);
     set.insert(5);
     set.insert(8);
 
-    let _invalid_range = set.range((Included(&8), Included(&3)));
+    let _invalid_range = set.range::<i32, _>((Included(&8), Included(&3)));
 }
 
 #[cfg_attr(
@@ -861,10 +861,10 @@ fn test_range_panic_1() {
 )]
 #[test]
 fn test_range_panic_2() {
-    let mut set = BTreeSet::new();
+    let mut set = BTreeSet::default();
     set.insert(3);
     set.insert(5);
     set.insert(8);
 
-    let _invalid_range = set.range((Excluded(&5), Excluded(&5)));
+    let _invalid_range = set.range::<i32, _>((Excluded(&5), Excluded(&5)));
 }

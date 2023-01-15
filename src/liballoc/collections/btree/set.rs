@@ -1,8 +1,8 @@
 // This is pretty much entirely stolen from TreeSet, since BTreeMap has an identical interface
 // to TreeMap
 
+use crate::{Comparator, LookupKey, OrdComparator};
 use alloc::vec::Vec;
-use core::borrow::Borrow;
 use core::cmp::Ordering::{self, Equal, Greater, Less};
 use core::cmp::{max, min};
 use core::fmt::{self, Debug};
@@ -26,7 +26,7 @@ use crate::polyfill::*;
 /// benefits and drawbacks.
 ///
 /// It is a logic error for an item to be modified in such a way that the item's ordering relative
-/// to any other item, as determined by the [`Ord`] trait, changes while it is in the set. This is
+/// to any other item, as determined by the [`Comparator`], changes while it is in the set. This is
 /// normally only possible through [`Cell`], [`RefCell`], global state, I/O, or unsafe code.
 /// The behavior resulting from such a logic error is not specified, but will be encapsulated to the
 /// `BTreeSet` that observed the logic error and not result in undefined behavior. This could
@@ -35,7 +35,6 @@ use crate::polyfill::*;
 /// Iterators returned by [`BTreeSet::iter`] produce their items in order, and take worst-case
 /// logarithmic and amortized constant time per item returned.
 ///
-/// [`Ord`]: core::cmp::Ord
 /// [`Cell`]: core::cell::Cell
 /// [`RefCell`]: core::cell::RefCell
 ///
@@ -46,7 +45,7 @@ use crate::polyfill::*;
 ///
 /// // Type inference lets us omit an explicit type signature (which
 /// // would be `BTreeSet<&str>` in this example).
-/// let mut books = BTreeSet::new();
+/// let mut books = BTreeSet::default();
 ///
 /// // Add some books.
 /// books.insert("A Dance With Dragons");
@@ -76,37 +75,37 @@ use crate::polyfill::*;
 ///
 /// let set = BTreeSet::from([1, 2, 3]);
 /// ```
-pub struct BTreeSet<T, A: Allocator + Clone = Global> {
-    map: BTreeMap<T, SetValZST, A>,
+pub struct BTreeSet<T, C = OrdComparator<T>, A: Allocator + Clone = Global> {
+    map: BTreeMap<T, SetValZST, C, A>,
 }
 
-impl<T: Hash, A: Allocator + Clone> Hash for BTreeSet<T, A> {
+impl<T: Hash, C, A: Allocator + Clone> Hash for BTreeSet<T, C, A> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.map.hash(state)
     }
 }
 
-impl<T: PartialEq, A: Allocator + Clone> PartialEq for BTreeSet<T, A> {
-    fn eq(&self, other: &BTreeSet<T, A>) -> bool {
+impl<T: PartialEq, C, A: Allocator + Clone> PartialEq for BTreeSet<T, C, A> {
+    fn eq(&self, other: &BTreeSet<T, C, A>) -> bool {
         self.map.eq(&other.map)
     }
 }
 
-impl<T: Eq, A: Allocator + Clone> Eq for BTreeSet<T, A> {}
+impl<T: Eq, C, A: Allocator + Clone> Eq for BTreeSet<T, C, A> {}
 
-impl<T: PartialOrd, A: Allocator + Clone> PartialOrd for BTreeSet<T, A> {
-    fn partial_cmp(&self, other: &BTreeSet<T, A>) -> Option<Ordering> {
+impl<T: PartialOrd, C, A: Allocator + Clone> PartialOrd for BTreeSet<T, C, A> {
+    fn partial_cmp(&self, other: &BTreeSet<T, C, A>) -> Option<Ordering> {
         self.map.partial_cmp(&other.map)
     }
 }
 
-impl<T: Ord, A: Allocator + Clone> Ord for BTreeSet<T, A> {
-    fn cmp(&self, other: &BTreeSet<T, A>) -> Ordering {
+impl<T: Ord, C, A: Allocator + Clone> Ord for BTreeSet<T, C, A> {
+    fn cmp(&self, other: &BTreeSet<T, C, A>) -> Ordering {
         self.map.cmp(&other.map)
     }
 }
 
-impl<T: Clone, A: Allocator + Clone> Clone for BTreeSet<T, A> {
+impl<T: Clone, C: Clone, A: Allocator + Clone> Clone for BTreeSet<T, C, A> {
     fn clone(&self) -> Self {
         BTreeSet { map: self.map.clone() }
     }
@@ -165,10 +164,11 @@ pub struct Range<'a, T: 'a> {
 /// [`difference`]: BTreeSet::difference
 #[must_use = "this returns the difference as an iterator, \
               without modifying either input set"]
-pub struct Difference<'a, T: 'a, A: Allocator + Clone = Global> {
-    inner: DifferenceInner<'a, T, A>,
+pub struct Difference<'a, T: 'a, C, A: Allocator + Clone = Global> {
+    inner: DifferenceInner<'a, T, C, A>,
+    comparator: &'a C,
 }
-enum DifferenceInner<'a, T: 'a, A: Allocator + Clone> {
+enum DifferenceInner<'a, T: 'a, C, A: Allocator + Clone> {
     Stitch {
         // iterate all of `self` and some of `other`, spotting matches along the way
         self_iter: Iter<'a, T>,
@@ -177,13 +177,13 @@ enum DifferenceInner<'a, T: 'a, A: Allocator + Clone> {
     Search {
         // iterate `self`, look up in `other`
         self_iter: Iter<'a, T>,
-        other_set: &'a BTreeSet<T, A>,
+        other_set: &'a BTreeSet<T, C, A>,
     },
     Iterate(Iter<'a, T>), // simply produce all elements in `self`
 }
 
 // Explicit Debug impl necessary because of issue #26925
-impl<T: Debug, A: Allocator + Clone> Debug for DifferenceInner<'_, T, A> {
+impl<T: Debug, C: Comparator, A: Allocator + Clone> Debug for DifferenceInner<'_, T, C, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             DifferenceInner::Stitch { self_iter, other_iter } => f
@@ -201,7 +201,7 @@ impl<T: Debug, A: Allocator + Clone> Debug for DifferenceInner<'_, T, A> {
     }
 }
 
-impl<T: fmt::Debug, A: Allocator + Clone> fmt::Debug for Difference<'_, T, A> {
+impl<T: fmt::Debug, C: Comparator, A: Allocator + Clone> fmt::Debug for Difference<'_, T, C, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Difference").field(&self.inner).finish()
     }
@@ -215,9 +215,9 @@ impl<T: fmt::Debug, A: Allocator + Clone> fmt::Debug for Difference<'_, T, A> {
 /// [`symmetric_difference`]: BTreeSet::symmetric_difference
 #[must_use = "this returns the difference as an iterator, \
               without modifying either input set"]
-pub struct SymmetricDifference<'a, T: 'a>(MergeIterInner<Iter<'a, T>>);
+pub struct SymmetricDifference<'a, T: 'a, C>(MergeIterInner<Iter<'a, T>>, &'a C);
 
-impl<T: fmt::Debug> fmt::Debug for SymmetricDifference<'_, T> {
+impl<T: fmt::Debug, C> fmt::Debug for SymmetricDifference<'_, T, C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("SymmetricDifference").field(&self.0).finish()
     }
@@ -231,10 +231,11 @@ impl<T: fmt::Debug> fmt::Debug for SymmetricDifference<'_, T> {
 /// [`intersection`]: BTreeSet::intersection
 #[must_use = "this returns the intersection as an iterator, \
               without modifying either input set"]
-pub struct Intersection<'a, T: 'a, A: Allocator + Clone = Global> {
-    inner: IntersectionInner<'a, T, A>,
+pub struct Intersection<'a, T: 'a, C, A: Allocator + Clone = Global> {
+    inner: IntersectionInner<'a, T, C, A>,
+    comparator: &'a C,
 }
-enum IntersectionInner<'a, T: 'a, A: Allocator + Clone> {
+enum IntersectionInner<'a, T: 'a, C, A: Allocator + Clone> {
     Stitch {
         // iterate similarly sized sets jointly, spotting matches along the way
         a: Iter<'a, T>,
@@ -243,13 +244,13 @@ enum IntersectionInner<'a, T: 'a, A: Allocator + Clone> {
     Search {
         // iterate a small set, look up in the large set
         small_iter: Iter<'a, T>,
-        large_set: &'a BTreeSet<T, A>,
+        large_set: &'a BTreeSet<T, C, A>,
     },
     Answer(Option<&'a T>), // return a specific element or emptiness
 }
 
 // Explicit Debug impl necessary because of issue #26925
-impl<T: Debug, A: Allocator + Clone> Debug for IntersectionInner<'_, T, A> {
+impl<T: Debug, C: Comparator, A: Allocator + Clone> Debug for IntersectionInner<'_, T, C, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             IntersectionInner::Stitch { a, b } => {
@@ -265,7 +266,7 @@ impl<T: Debug, A: Allocator + Clone> Debug for IntersectionInner<'_, T, A> {
     }
 }
 
-impl<T: Debug, A: Allocator + Clone> Debug for Intersection<'_, T, A> {
+impl<T: Debug, C: Comparator, A: Allocator + Clone> Debug for Intersection<'_, T, C, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Intersection").field(&self.inner).finish()
     }
@@ -279,9 +280,9 @@ impl<T: Debug, A: Allocator + Clone> Debug for Intersection<'_, T, A> {
 /// [`union`]: BTreeSet::union
 #[must_use = "this returns the union as an iterator, \
               without modifying either input set"]
-pub struct Union<'a, T: 'a>(MergeIterInner<Iter<'a, T>>);
+pub struct Union<'a, T: 'a, C>(MergeIterInner<Iter<'a, T>>, &'a C);
 
-impl<T: fmt::Debug> fmt::Debug for Union<'_, T> {
+impl<T: fmt::Debug, C> fmt::Debug for Union<'_, T, C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Union").field(&self.0).finish()
     }
@@ -295,44 +296,107 @@ impl<T: fmt::Debug> fmt::Debug for Union<'_, T> {
 // and it's a power of two to make that division cheap.
 const ITER_PERFORMANCE_TIPPING_SIZE_DIFF: usize = 16;
 
-impl<T> BTreeSet<T> {
-    /// Makes a new, empty `BTreeSet`.
+impl<T, C> BTreeSet<T, C> {
+    /// Makes a new, empty `BTreeSet` ordered by the given `comparator`.
     ///
     /// Does not allocate anything on its own.
     ///
     /// # Examples
     ///
     /// ```
-    /// # #![allow(unused_mut)]
-    /// use copse::BTreeSet;
+    /// # use core::cmp::Ordering;
+    /// # use copse::{Comparator, LookupKey, BTreeSet};
+    /// #
+    /// // define a comparator
+    /// struct NthByteComparator {
+    ///     n: usize, // runtime state
+    /// }
     ///
-    /// let mut set: BTreeSet<i32> = BTreeSet::new();
+    /// impl Comparator for NthByteComparator {
+    ///     // etc
+    /// #     type Key = str;
+    /// #     fn cmp(&self, this: &str, that: &str) -> Ordering {
+    /// #         match (this.as_bytes().get(self.n), that.as_bytes().get(self.n)) {
+    /// #             (Some(lhs), Some(rhs)) => lhs.cmp(rhs),
+    /// #             (Some(_), None) => Ordering::Greater,
+    /// #             (None, Some(_)) => Ordering::Less,
+    /// #             (None, None) => Ordering::Equal,
+    /// #         }
+    /// #     }
+    /// }
+    ///
+    /// // define lookup key types for collections sorted by our comparator
+    /// impl LookupKey<NthByteComparator> for String {
+    ///     // etc
+    /// #     fn key(&self) -> &str { self.as_str() }
+    /// }
+    /// # impl LookupKey<NthByteComparator> for str {
+    /// #     fn key(&self) -> &str { self }
+    /// # }
+    ///
+    /// // create a set using our comparator
+    /// let mut set = BTreeSet::new(NthByteComparator { n: 10 });
+    ///
+    /// // entries can now be inserted into the empty map
+    /// assert!(set.insert("abcdefghij".to_string()));
     /// ```
     #[must_use]
-    pub const fn new() -> BTreeSet<T> {
-        BTreeSet { map: BTreeMap::new() }
+    pub const fn new(comparator: C) -> BTreeSet<T, C> {
+        BTreeSet { map: BTreeMap::new(comparator) }
     }
 }
 
-impl<T, A: Allocator + Clone> BTreeSet<T, A> {
+impl<T, C, A: Allocator + Clone> BTreeSet<T, C, A> {
     decorate_if! {
         if #[cfg(feature = "btreemap_alloc")] {
-            /// Makes a new `BTreeSet` with a reasonable choice of B.
+            /// Makes a new `BTreeSet` with a reasonable choice of B ordered by the given `comparator`.
             ///
             /// # Examples
             ///
             /// ```
-            /// # #![allow(unused_mut)]
-            /// # #![feature(allocator_api)]
-            /// use copse::BTreeSet;
-            /// use std::alloc::Global;
+            /// #![feature(allocator_api)]
             ///
-            /// let mut set: BTreeSet<i32> = BTreeSet::new_in(Global);
+            /// use std::alloc::Global;
+            /// # use core::cmp::Ordering;
+            /// # use copse::{BTreeSet, Comparator, LookupKey, OrdComparator};
+            /// #
+            /// // define a comparator
+            /// struct NthByteComparator {
+            ///     n: usize, // runtime state
+            /// }
+            ///
+            /// impl Comparator for NthByteComparator {
+            ///     // etc
+            /// #     type Key = str;
+            /// #     fn cmp(&self, this: &str, that: &str) -> Ordering {
+            /// #         match (this.as_bytes().get(self.n), that.as_bytes().get(self.n)) {
+            /// #             (Some(lhs), Some(rhs)) => lhs.cmp(rhs),
+            /// #             (Some(_), None) => Ordering::Greater,
+            /// #             (None, Some(_)) => Ordering::Less,
+            /// #             (None, None) => Ordering::Equal,
+            /// #         }
+            /// #     }
+            /// }
+            ///
+            /// // define lookup key types for collections sorted by our comparator
+            /// impl LookupKey<NthByteComparator> for String {
+            ///     // etc
+            /// #     fn key(&self) -> &str { self.as_str() }
+            /// }
+            /// # impl LookupKey<NthByteComparator> for str {
+            /// #     fn key(&self) -> &str { self }
+            /// # }
+            ///
+            /// // create a set using our comparator
+            /// let mut set = BTreeSet::new_in(NthByteComparator { n: 10 }, Global);
+            ///
+            /// // entries can now be inserted into the empty map
+            /// assert!(set.insert("abcdefghij".to_string()));
             /// ```
             pub
         }
-        fn new_in(alloc: A) -> BTreeSet<T, A> {
-            BTreeSet { map: BTreeMap::new_in(alloc) }
+        fn new_in(comparator: C, alloc: A) -> BTreeSet<T, C, A> {
+            BTreeSet { map: BTreeMap::new_in(comparator, alloc) }
         }
     }
 
@@ -354,19 +418,20 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// use copse::BTreeSet;
     /// use std::ops::Bound::Included;
     ///
-    /// let mut set = BTreeSet::new();
+    /// let mut set = BTreeSet::default();
     /// set.insert(3);
     /// set.insert(5);
     /// set.insert(8);
-    /// for &elem in set.range((Included(&4), Included(&8))) {
+    /// for &elem in set.range::<i32, _>((Included(&4), Included(&8))) {
     ///     println!("{elem}");
     /// }
     /// assert_eq!(Some(&5), set.range(4..).next());
     /// ```
     pub fn range<K: ?Sized, R>(&self, range: R) -> Range<'_, T>
     where
-        K: Ord,
-        T: Borrow<K> + Ord,
+        K: LookupKey<C>,
+        T: LookupKey<C>,
+        C: Comparator,
         R: RangeBounds<K>,
     {
         Range { iter: self.map.range(range) }
@@ -381,35 +446,45 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     /// use copse::BTreeSet;
     ///
-    /// let mut a = BTreeSet::new();
+    /// let mut a = BTreeSet::default();
     /// a.insert(1);
     /// a.insert(2);
     ///
-    /// let mut b = BTreeSet::new();
+    /// let mut b = BTreeSet::default();
     /// b.insert(2);
     /// b.insert(3);
     ///
     /// let diff: Vec<_> = a.difference(&b).cloned().collect();
     /// assert_eq!(diff, [1]);
     /// ```
-    pub fn difference<'a>(&'a self, other: &'a BTreeSet<T, A>) -> Difference<'a, T, A>
+    pub fn difference<'a>(&'a self, other: &'a BTreeSet<T, C, A>) -> Difference<'a, T, C, A>
     where
-        T: Ord,
+        T: LookupKey<C>,
+        C: Comparator,
     {
         let (self_min, self_max) =
             if let (Some(self_min), Some(self_max)) = (self.first(), self.last()) {
                 (self_min, self_max)
             } else {
-                return Difference { inner: DifferenceInner::Iterate(self.iter()) };
+                return Difference {
+                    inner: DifferenceInner::Iterate(self.iter()),
+                    comparator: &self.map.comparator,
+                };
             };
         let (other_min, other_max) =
             if let (Some(other_min), Some(other_max)) = (other.first(), other.last()) {
                 (other_min, other_max)
             } else {
-                return Difference { inner: DifferenceInner::Iterate(self.iter()) };
+                return Difference {
+                    inner: DifferenceInner::Iterate(self.iter()),
+                    comparator: &self.map.comparator,
+                };
             };
         Difference {
-            inner: match (self_min.cmp(other_max), self_max.cmp(other_min)) {
+            inner: match (
+                self.map.comparator.cmp(self_min.key(), other_max.key()),
+                self.map.comparator.cmp(self_max.key(), other_min.key()),
+            ) {
                 (Greater, _) | (_, Less) => DifferenceInner::Iterate(self.iter()),
                 (Equal, _) => {
                     let mut self_iter = self.iter();
@@ -429,6 +504,7 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
                     other_iter: other.iter().peekable(),
                 },
             },
+            comparator: &self.map.comparator,
         }
     }
 
@@ -441,11 +517,11 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     /// use copse::BTreeSet;
     ///
-    /// let mut a = BTreeSet::new();
+    /// let mut a = BTreeSet::default();
     /// a.insert(1);
     /// a.insert(2);
     ///
-    /// let mut b = BTreeSet::new();
+    /// let mut b = BTreeSet::default();
     /// b.insert(2);
     /// b.insert(3);
     ///
@@ -454,12 +530,13 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     pub fn symmetric_difference<'a>(
         &'a self,
-        other: &'a BTreeSet<T, A>,
-    ) -> SymmetricDifference<'a, T>
+        other: &'a BTreeSet<T, C, A>,
+    ) -> SymmetricDifference<'a, T, C>
     where
-        T: Ord,
+        T: LookupKey<C>,
+        C: Comparator,
     {
-        SymmetricDifference(MergeIterInner::new(self.iter(), other.iter()))
+        SymmetricDifference(MergeIterInner::new(self.iter(), other.iter()), &self.map.comparator)
     }
 
     /// Visits the elements representing the intersection,
@@ -471,35 +548,45 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     /// use copse::BTreeSet;
     ///
-    /// let mut a = BTreeSet::new();
+    /// let mut a = BTreeSet::default();
     /// a.insert(1);
     /// a.insert(2);
     ///
-    /// let mut b = BTreeSet::new();
+    /// let mut b = BTreeSet::default();
     /// b.insert(2);
     /// b.insert(3);
     ///
     /// let intersection: Vec<_> = a.intersection(&b).cloned().collect();
     /// assert_eq!(intersection, [2]);
     /// ```
-    pub fn intersection<'a>(&'a self, other: &'a BTreeSet<T, A>) -> Intersection<'a, T, A>
+    pub fn intersection<'a>(&'a self, other: &'a BTreeSet<T, C, A>) -> Intersection<'a, T, C, A>
     where
-        T: Ord,
+        T: LookupKey<C>,
+        C: Comparator,
     {
         let (self_min, self_max) =
             if let (Some(self_min), Some(self_max)) = (self.first(), self.last()) {
                 (self_min, self_max)
             } else {
-                return Intersection { inner: IntersectionInner::Answer(None) };
+                return Intersection {
+                    inner: IntersectionInner::Answer(None),
+                    comparator: &self.map.comparator,
+                };
             };
         let (other_min, other_max) =
             if let (Some(other_min), Some(other_max)) = (other.first(), other.last()) {
                 (other_min, other_max)
             } else {
-                return Intersection { inner: IntersectionInner::Answer(None) };
+                return Intersection {
+                    inner: IntersectionInner::Answer(None),
+                    comparator: &self.map.comparator,
+                };
             };
         Intersection {
-            inner: match (self_min.cmp(other_max), self_max.cmp(other_min)) {
+            inner: match (
+                self.map.comparator.cmp(self_min.key(), other_max.key()),
+                self.map.comparator.cmp(self_max.key(), other_min.key()),
+            ) {
                 (Greater, _) | (_, Less) => IntersectionInner::Answer(None),
                 (Equal, _) => IntersectionInner::Answer(Some(self_min)),
                 (_, Equal) => IntersectionInner::Answer(Some(self_max)),
@@ -511,6 +598,7 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
                 }
                 _ => IntersectionInner::Stitch { a: self.iter(), b: other.iter() },
             },
+            comparator: &self.map.comparator,
         }
     }
 
@@ -523,20 +611,21 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     /// use copse::BTreeSet;
     ///
-    /// let mut a = BTreeSet::new();
+    /// let mut a = BTreeSet::default();
     /// a.insert(1);
     ///
-    /// let mut b = BTreeSet::new();
+    /// let mut b = BTreeSet::default();
     /// b.insert(2);
     ///
     /// let union: Vec<_> = a.union(&b).cloned().collect();
     /// assert_eq!(union, [1, 2]);
     /// ```
-    pub fn union<'a>(&'a self, other: &'a BTreeSet<T, A>) -> Union<'a, T>
+    pub fn union<'a>(&'a self, other: &'a BTreeSet<T, C, A>) -> Union<'a, T, C>
     where
-        T: Ord,
+        T: LookupKey<C>,
+        C: Comparator,
     {
-        Union(MergeIterInner::new(self.iter(), other.iter()))
+        Union(MergeIterInner::new(self.iter(), other.iter()), &self.map.comparator)
     }
 
     /// Clears the set, removing all elements.
@@ -546,7 +635,7 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     /// use copse::BTreeSet;
     ///
-    /// let mut v = BTreeSet::new();
+    /// let mut v = BTreeSet::default();
     /// v.insert(1);
     /// v.clear();
     /// assert!(v.is_empty());
@@ -554,6 +643,7 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     pub fn clear(&mut self)
     where
         A: Clone,
+        C: Clone,
     {
         self.map.clear()
     }
@@ -575,8 +665,9 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     pub fn contains<Q: ?Sized>(&self, value: &Q) -> bool
     where
-        T: Borrow<Q> + Ord,
-        Q: Ord,
+        T: LookupKey<C>,
+        Q: LookupKey<C>,
+        C: Comparator,
     {
         self.map.contains_key(value)
     }
@@ -599,8 +690,9 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     pub fn get<Q: ?Sized>(&self, value: &Q) -> Option<&T>
     where
-        T: Borrow<Q> + Ord,
-        Q: Ord,
+        T: LookupKey<C>,
+        Q: LookupKey<C>,
+        C: Comparator,
     {
         Recover::get(&self.map, value)
     }
@@ -614,7 +706,7 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// use copse::BTreeSet;
     ///
     /// let a = BTreeSet::from([1, 2, 3]);
-    /// let mut b = BTreeSet::new();
+    /// let mut b = BTreeSet::default();
     ///
     /// assert_eq!(a.is_disjoint(&b), true);
     /// b.insert(4);
@@ -623,9 +715,10 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// assert_eq!(a.is_disjoint(&b), false);
     /// ```
     #[must_use]
-    pub fn is_disjoint(&self, other: &BTreeSet<T, A>) -> bool
+    pub fn is_disjoint(&self, other: &BTreeSet<T, C, A>) -> bool
     where
-        T: Ord,
+        T: LookupKey<C>,
+        C: Comparator,
     {
         self.intersection(other).next().is_none()
     }
@@ -639,7 +732,7 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// use copse::BTreeSet;
     ///
     /// let sup = BTreeSet::from([1, 2, 3]);
-    /// let mut set = BTreeSet::new();
+    /// let mut set = BTreeSet::default();
     ///
     /// assert_eq!(set.is_subset(&sup), true);
     /// set.insert(2);
@@ -648,9 +741,10 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// assert_eq!(set.is_subset(&sup), false);
     /// ```
     #[must_use]
-    pub fn is_subset(&self, other: &BTreeSet<T, A>) -> bool
+    pub fn is_subset(&self, other: &BTreeSet<T, C, A>) -> bool
     where
-        T: Ord,
+        T: LookupKey<C>,
+        C: Comparator,
     {
         // Same result as self.difference(other).next().is_none()
         // but the code below is faster (hugely in some cases).
@@ -670,14 +764,14 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
                 return false; // other is empty
             };
         let mut self_iter = self.iter();
-        match self_min.cmp(other_min) {
+        match self.map.comparator.cmp(self_min.key(), other_min.key()) {
             Less => return false,
             Equal => {
                 self_iter.next();
             }
             Greater => (),
         }
-        match self_max.cmp(other_max) {
+        match self.map.comparator.cmp(self_max.key(), other_max.key()) {
             Greater => return false,
             Equal => {
                 self_iter.next_back();
@@ -696,7 +790,10 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
             other_iter.next_back();
             let mut self_next = self_iter.next();
             while let Some(self1) = self_next {
-                match other_iter.next().map_or(Less, |other1| self1.cmp(other1)) {
+                match other_iter
+                    .next()
+                    .map_or(Less, |other1| self.map.comparator.cmp(self1.key(), other1.key()))
+                {
                     Less => return false,
                     Equal => self_next = self_iter.next(),
                     Greater => (),
@@ -715,7 +812,7 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// use copse::BTreeSet;
     ///
     /// let sub = BTreeSet::from([1, 2]);
-    /// let mut set = BTreeSet::new();
+    /// let mut set = BTreeSet::default();
     ///
     /// assert_eq!(set.is_superset(&sub), false);
     ///
@@ -727,9 +824,10 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// assert_eq!(set.is_superset(&sub), true);
     /// ```
     #[must_use]
-    pub fn is_superset(&self, other: &BTreeSet<T, A>) -> bool
+    pub fn is_superset(&self, other: &BTreeSet<T, C, A>) -> bool
     where
-        T: Ord,
+        T: LookupKey<C>,
+        C: Comparator,
     {
         other.is_subset(self)
     }
@@ -744,7 +842,7 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     /// use copse::BTreeSet;
     ///
-    /// let mut set = BTreeSet::new();
+    /// let mut set = BTreeSet::default();
     /// assert_eq!(set.first(), None);
     /// set.insert(1);
     /// assert_eq!(set.first(), Some(&1));
@@ -754,7 +852,8 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     #[must_use]
     pub fn first(&self) -> Option<&T>
     where
-        T: Ord,
+        T: LookupKey<C>,
+        C: Comparator,
     {
         self.map.first_key_value().map(|(k, _)| k)
     }
@@ -769,7 +868,7 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     /// use copse::BTreeSet;
     ///
-    /// let mut set = BTreeSet::new();
+    /// let mut set = BTreeSet::default();
     /// assert_eq!(set.last(), None);
     /// set.insert(1);
     /// assert_eq!(set.last(), Some(&1));
@@ -779,7 +878,8 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     #[must_use]
     pub fn last(&self) -> Option<&T>
     where
-        T: Ord,
+        T: LookupKey<C>,
+        C: Comparator,
     {
         self.map.last_key_value().map(|(k, _)| k)
     }
@@ -792,7 +892,7 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     /// use copse::BTreeSet;
     ///
-    /// let mut set = BTreeSet::new();
+    /// let mut set = BTreeSet::default();
     ///
     /// set.insert(1);
     /// while let Some(n) = set.pop_first() {
@@ -802,7 +902,8 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     pub fn pop_first(&mut self) -> Option<T>
     where
-        T: Ord,
+        T: LookupKey<C>,
+        C: Comparator,
     {
         self.map.pop_first().map(|kv| kv.0)
     }
@@ -815,7 +916,7 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     /// use copse::BTreeSet;
     ///
-    /// let mut set = BTreeSet::new();
+    /// let mut set = BTreeSet::default();
     ///
     /// set.insert(1);
     /// while let Some(n) = set.pop_last() {
@@ -825,7 +926,8 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     pub fn pop_last(&mut self) -> Option<T>
     where
-        T: Ord,
+        T: LookupKey<C>,
+        C: Comparator,
     {
         self.map.pop_last().map(|kv| kv.0)
     }
@@ -848,7 +950,7 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     /// use copse::BTreeSet;
     ///
-    /// let mut set = BTreeSet::new();
+    /// let mut set = BTreeSet::default();
     ///
     /// assert_eq!(set.insert(2), true);
     /// assert_eq!(set.insert(2), false);
@@ -856,7 +958,8 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     pub fn insert(&mut self, value: T) -> bool
     where
-        T: Ord,
+        T: LookupKey<C>,
+        C: Comparator,
     {
         self.map.insert(value, SetValZST::default()).is_none()
     }
@@ -869,7 +972,7 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     /// use copse::BTreeSet;
     ///
-    /// let mut set = BTreeSet::new();
+    /// let mut set = BTreeSet::default();
     /// set.insert(Vec::<i32>::new());
     ///
     /// assert_eq!(set.get(&[][..]).unwrap().capacity(), 0);
@@ -878,9 +981,10 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     pub fn replace(&mut self, value: T) -> Option<T>
     where
-        T: Ord,
+        T: LookupKey<C>,
+        C: Comparator,
     {
-        Recover::replace(&mut self.map, value)
+        Recover::<T>::replace(&mut self.map, value)
     }
 
     /// If the set contains an element equal to the value, removes it from the
@@ -895,7 +999,7 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     /// use copse::BTreeSet;
     ///
-    /// let mut set = BTreeSet::new();
+    /// let mut set = BTreeSet::default();
     ///
     /// set.insert(2);
     /// assert_eq!(set.remove(&2), true);
@@ -903,8 +1007,9 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     pub fn remove<Q: ?Sized>(&mut self, value: &Q) -> bool
     where
-        T: Borrow<Q> + Ord,
-        Q: Ord,
+        T: LookupKey<C>,
+        Q: LookupKey<C>,
+        C: Comparator,
     {
         self.map.remove(value).is_some()
     }
@@ -927,8 +1032,9 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     pub fn take<Q: ?Sized>(&mut self, value: &Q) -> Option<T>
     where
-        T: Borrow<Q> + Ord,
-        Q: Ord,
+        T: LookupKey<C>,
+        Q: LookupKey<C>,
+        C: Comparator,
     {
         Recover::take(&mut self.map, value)
     }
@@ -950,7 +1056,8 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     pub fn retain<F>(&mut self, mut f: F)
     where
-        T: Ord,
+        T: LookupKey<C>,
+        C: Comparator,
         F: FnMut(&T) -> bool,
     {
         self.drain_filter(|v| !f(v));
@@ -963,12 +1070,12 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     /// use copse::BTreeSet;
     ///
-    /// let mut a = BTreeSet::new();
+    /// let mut a = BTreeSet::default();
     /// a.insert(1);
     /// a.insert(2);
     /// a.insert(3);
     ///
-    /// let mut b = BTreeSet::new();
+    /// let mut b = BTreeSet::default();
     /// b.insert(3);
     /// b.insert(4);
     /// b.insert(5);
@@ -986,7 +1093,8 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     pub fn append(&mut self, other: &mut Self)
     where
-        T: Ord,
+        T: LookupKey<C>,
+        C: Clone + Comparator,
         A: Clone,
     {
         self.map.append(&mut other.map);
@@ -1002,7 +1110,7 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// ```
     /// use copse::BTreeSet;
     ///
-    /// let mut a = BTreeSet::new();
+    /// let mut a = BTreeSet::default();
     /// a.insert(1);
     /// a.insert(2);
     /// a.insert(3);
@@ -1021,9 +1129,10 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     /// assert!(b.contains(&17));
     /// assert!(b.contains(&41));
     /// ```
-    pub fn split_off<Q: ?Sized + Ord>(&mut self, value: &Q) -> Self
+    pub fn split_off<Q: ?Sized + LookupKey<C>>(&mut self, value: &Q) -> Self
     where
-        T: Borrow<Q> + Ord,
+        T: LookupKey<C>,
+        C: Comparator + Clone,
         A: Clone,
     {
         BTreeSet { map: self.map.split_off(value) }
@@ -1063,7 +1172,8 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
         }
         fn drain_filter<'a, F>(&'a mut self, pred: F) -> DrainFilter<'a, T, F, A>
         where
-            T: Ord,
+            T: LookupKey<C>,
+            C: Comparator,
             F: 'a + FnMut(&T) -> bool,
         {
             let (inner, alloc) = self.map.drain_filter_inner();
@@ -1111,7 +1221,7 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
         /// ```
         /// use copse::BTreeSet;
         ///
-        /// let mut v = BTreeSet::new();
+        /// let mut v = BTreeSet::default();
         /// assert_eq!(v.len(), 0);
         /// v.insert(1);
         /// assert_eq!(v.len(), 1);
@@ -1132,7 +1242,7 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
         /// ```
         /// use copse::BTreeSet;
         ///
-        /// let mut v = BTreeSet::new();
+        /// let mut v = BTreeSet::default();
         /// assert!(v.is_empty());
         /// v.insert(1);
         /// assert!(!v.is_empty());
@@ -1146,29 +1256,34 @@ impl<T, A: Allocator + Clone> BTreeSet<T, A> {
     }
 }
 
-impl<T: Ord> FromIterator<T> for BTreeSet<T> {
-    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> BTreeSet<T> {
+impl<T: LookupKey<C>, C: Comparator + Default> FromIterator<T> for BTreeSet<T, C> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> BTreeSet<T, C> {
         let mut inputs: Vec<_> = iter.into_iter().collect();
 
         if inputs.is_empty() {
-            return BTreeSet::new();
+            return BTreeSet::default();
         }
 
         // use stable sort to preserve the insertion order.
-        inputs.sort();
-        BTreeSet::from_sorted_iter(inputs.into_iter(), Global)
+        let comparator = C::default();
+        inputs.sort_by(|a, b| comparator.cmp(a.key(), b.key()));
+        BTreeSet::from_sorted_iter(inputs.into_iter(), comparator, Global)
     }
 }
 
-impl<T: Ord, A: Allocator + Clone> BTreeSet<T, A> {
-    fn from_sorted_iter<I: Iterator<Item = T>>(iter: I, alloc: A) -> BTreeSet<T, A> {
+impl<T: LookupKey<C>, C: Comparator, A: Allocator + Clone> BTreeSet<T, C, A> {
+    fn from_sorted_iter<I: Iterator<Item = T>>(
+        iter: I,
+        comparator: C,
+        alloc: A,
+    ) -> BTreeSet<T, C, A> {
         let iter = iter.map(|k| (k, SetValZST::default()));
-        let map = BTreeMap::bulk_build_from_sorted_iter(iter, alloc);
+        let map = BTreeMap::bulk_build_from_sorted_iter(iter, comparator, alloc);
         BTreeSet { map }
     }
 }
 
-impl<T: Ord, const N: usize> From<[T; N]> for BTreeSet<T> {
+impl<T: LookupKey<C>, C: Comparator + Default, const N: usize> From<[T; N]> for BTreeSet<T, C> {
     /// Converts a `[T; N]` into a `BTreeSet<T>`.
     ///
     /// ```
@@ -1180,18 +1295,19 @@ impl<T: Ord, const N: usize> From<[T; N]> for BTreeSet<T> {
     /// ```
     fn from(mut arr: [T; N]) -> Self {
         if N == 0 {
-            return BTreeSet::new();
+            return BTreeSet::default();
         }
 
         // use stable sort to preserve the insertion order.
-        arr.sort();
+        let comparator = C::default();
+        arr.sort_by(|a, b| comparator.cmp(a.key(), b.key()));
         let iter = IntoIterator::into_iter(arr).map(|k| (k, SetValZST::default()));
-        let map = BTreeMap::bulk_build_from_sorted_iter(iter, Global);
+        let map = BTreeMap::bulk_build_from_sorted_iter(iter, comparator, Global);
         BTreeSet { map }
     }
 }
 
-impl<T, A: Allocator + Clone> IntoIterator for BTreeSet<T, A> {
+impl<T, C, A: Allocator + Clone> IntoIterator for BTreeSet<T, C, A> {
     type Item = T;
     type IntoIter = IntoIter<T, A>;
 
@@ -1212,7 +1328,7 @@ impl<T, A: Allocator + Clone> IntoIterator for BTreeSet<T, A> {
     }
 }
 
-impl<'a, T, A: Allocator + Clone> IntoIterator for &'a BTreeSet<T, A> {
+impl<'a, T, C: Comparator, A: Allocator + Clone> IntoIterator for &'a BTreeSet<T, C, A> {
     type Item = &'a T;
     type IntoIter = Iter<'a, T>;
 
@@ -1226,8 +1342,8 @@ decorate_if! {
     if #[cfg(feature = "btree_drain_filter")] { pub }
     struct DrainFilter<'a, T, F, A: Allocator + Clone = Global>
     where
-    T: 'a,
-    F: 'a + FnMut(&T) -> bool,
+        T: 'a,
+        F: 'a + FnMut(&T) -> bool,
     {
         pred: F,
         inner: super::map::DrainFilterInner<'a, T, SetValZST>,
@@ -1277,7 +1393,7 @@ impl<T, F, A: Allocator + Clone> FusedIterator for DrainFilter<'_, T, F, A> wher
 {
 }
 
-impl<T: Ord, A: Allocator + Clone> Extend<T> for BTreeSet<T, A> {
+impl<T: LookupKey<C>, C: Comparator, A: Allocator + Clone> Extend<T> for BTreeSet<T, C, A> {
     #[inline]
     fn extend<Iter: IntoIterator<Item = T>>(&mut self, iter: Iter) {
         iter.into_iter().for_each(move |elem| {
@@ -1292,7 +1408,9 @@ impl<T: Ord, A: Allocator + Clone> Extend<T> for BTreeSet<T, A> {
     }
 }
 
-impl<'a, T: 'a + Ord + Copy, A: Allocator + Clone> Extend<&'a T> for BTreeSet<T, A> {
+impl<'a, T: 'a + LookupKey<C> + Copy, C: Comparator, A: Allocator + Clone> Extend<&'a T>
+    for BTreeSet<T, C, A>
+{
     fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
         self.extend(iter.into_iter().cloned());
     }
@@ -1304,15 +1422,17 @@ impl<'a, T: 'a + Ord + Copy, A: Allocator + Clone> Extend<&'a T> for BTreeSet<T,
     }
 }
 
-impl<T> Default for BTreeSet<T> {
-    /// Creates an empty `BTreeSet`.
-    fn default() -> BTreeSet<T> {
-        BTreeSet::new()
+impl<T, C: Default> Default for BTreeSet<T, C> {
+    /// Creates an empty `BTreeSet` ordered by the `Ord` trait.
+    fn default() -> BTreeSet<T, C> {
+        BTreeSet::new(C::default())
     }
 }
 
-impl<T: Ord + Clone, A: Allocator + Clone> Sub<&BTreeSet<T, A>> for &BTreeSet<T, A> {
-    type Output = BTreeSet<T, A>;
+impl<T: LookupKey<C> + Clone, C: Comparator + Clone, A: Allocator + Clone> Sub<&BTreeSet<T, C, A>>
+    for &BTreeSet<T, C, A>
+{
+    type Output = BTreeSet<T, C, A>;
 
     /// Returns the difference of `self` and `rhs` as a new `BTreeSet<T>`.
     ///
@@ -1327,16 +1447,19 @@ impl<T: Ord + Clone, A: Allocator + Clone> Sub<&BTreeSet<T, A>> for &BTreeSet<T,
     /// let result = &a - &b;
     /// assert_eq!(result, BTreeSet::from([1, 2]));
     /// ```
-    fn sub(self, rhs: &BTreeSet<T, A>) -> BTreeSet<T, A> {
+    fn sub(self, rhs: &BTreeSet<T, C, A>) -> BTreeSet<T, C, A> {
         BTreeSet::from_sorted_iter(
             self.difference(rhs).cloned(),
+            self.map.comparator.clone(),
             ManuallyDrop::into_inner(self.map.alloc.clone()),
         )
     }
 }
 
-impl<T: Ord + Clone, A: Allocator + Clone> BitXor<&BTreeSet<T, A>> for &BTreeSet<T, A> {
-    type Output = BTreeSet<T, A>;
+impl<T: LookupKey<C> + Clone, C: Comparator + Clone, A: Allocator + Clone>
+    BitXor<&BTreeSet<T, C, A>> for &BTreeSet<T, C, A>
+{
+    type Output = BTreeSet<T, C, A>;
 
     /// Returns the symmetric difference of `self` and `rhs` as a new `BTreeSet<T>`.
     ///
@@ -1351,16 +1474,19 @@ impl<T: Ord + Clone, A: Allocator + Clone> BitXor<&BTreeSet<T, A>> for &BTreeSet
     /// let result = &a ^ &b;
     /// assert_eq!(result, BTreeSet::from([1, 4]));
     /// ```
-    fn bitxor(self, rhs: &BTreeSet<T, A>) -> BTreeSet<T, A> {
+    fn bitxor(self, rhs: &BTreeSet<T, C, A>) -> BTreeSet<T, C, A> {
         BTreeSet::from_sorted_iter(
             self.symmetric_difference(rhs).cloned(),
+            self.map.comparator.clone(),
             ManuallyDrop::into_inner(self.map.alloc.clone()),
         )
     }
 }
 
-impl<T: Ord + Clone, A: Allocator + Clone> BitAnd<&BTreeSet<T, A>> for &BTreeSet<T, A> {
-    type Output = BTreeSet<T, A>;
+impl<T: LookupKey<C> + Clone, C: Comparator + Clone, A: Allocator + Clone>
+    BitAnd<&BTreeSet<T, C, A>> for &BTreeSet<T, C, A>
+{
+    type Output = BTreeSet<T, C, A>;
 
     /// Returns the intersection of `self` and `rhs` as a new `BTreeSet<T>`.
     ///
@@ -1375,16 +1501,19 @@ impl<T: Ord + Clone, A: Allocator + Clone> BitAnd<&BTreeSet<T, A>> for &BTreeSet
     /// let result = &a & &b;
     /// assert_eq!(result, BTreeSet::from([2, 3]));
     /// ```
-    fn bitand(self, rhs: &BTreeSet<T, A>) -> BTreeSet<T, A> {
+    fn bitand(self, rhs: &BTreeSet<T, C, A>) -> BTreeSet<T, C, A> {
         BTreeSet::from_sorted_iter(
             self.intersection(rhs).cloned(),
+            self.map.comparator.clone(),
             ManuallyDrop::into_inner(self.map.alloc.clone()),
         )
     }
 }
 
-impl<T: Ord + Clone, A: Allocator + Clone> BitOr<&BTreeSet<T, A>> for &BTreeSet<T, A> {
-    type Output = BTreeSet<T, A>;
+impl<T: LookupKey<C> + Clone, C: Comparator + Clone, A: Allocator + Clone> BitOr<&BTreeSet<T, C, A>>
+    for &BTreeSet<T, C, A>
+{
+    type Output = BTreeSet<T, C, A>;
 
     /// Returns the union of `self` and `rhs` as a new `BTreeSet<T>`.
     ///
@@ -1399,15 +1528,16 @@ impl<T: Ord + Clone, A: Allocator + Clone> BitOr<&BTreeSet<T, A>> for &BTreeSet<
     /// let result = &a | &b;
     /// assert_eq!(result, BTreeSet::from([1, 2, 3, 4, 5]));
     /// ```
-    fn bitor(self, rhs: &BTreeSet<T, A>) -> BTreeSet<T, A> {
+    fn bitor(self, rhs: &BTreeSet<T, C, A>) -> BTreeSet<T, C, A> {
         BTreeSet::from_sorted_iter(
             self.union(rhs).cloned(),
+            self.map.comparator.clone(),
             ManuallyDrop::into_inner(self.map.alloc.clone()),
         )
     }
 }
 
-impl<T: Debug, A: Allocator + Clone> Debug for BTreeSet<T, A> {
+impl<T: Debug, C, A: Allocator + Clone> Debug for BTreeSet<T, C, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_set().entries(self.iter()).finish()
     }
@@ -1512,7 +1642,7 @@ impl<'a, T> DoubleEndedIterator for Range<'a, T> {
 
 impl<T> FusedIterator for Range<'_, T> {}
 
-impl<T, A: Allocator + Clone> Clone for Difference<'_, T, A> {
+impl<T, C, A: Allocator + Clone> Clone for Difference<'_, T, C, A> {
     fn clone(&self) -> Self {
         Difference {
             inner: match &self.inner {
@@ -1525,10 +1655,13 @@ impl<T, A: Allocator + Clone> Clone for Difference<'_, T, A> {
                 }
                 DifferenceInner::Iterate(iter) => DifferenceInner::Iterate(iter.clone()),
             },
+            comparator: self.comparator,
         }
     }
 }
-impl<'a, T: Ord, A: Allocator + Clone> Iterator for Difference<'a, T, A> {
+impl<'a, T: LookupKey<C>, C: Comparator, A: Allocator + Clone> Iterator
+    for Difference<'a, T, C, A>
+{
     type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
@@ -1536,7 +1669,9 @@ impl<'a, T: Ord, A: Allocator + Clone> Iterator for Difference<'a, T, A> {
             DifferenceInner::Stitch { self_iter, other_iter } => {
                 let mut self_next = self_iter.next()?;
                 loop {
-                    match other_iter.peek().map_or(Less, |other_next| self_next.cmp(other_next)) {
+                    match other_iter.peek().map_or(Less, |&other_next| {
+                        self.comparator.cmp(self_next.key(), other_next.key())
+                    }) {
                         Less => return Some(self_next),
                         Equal => {
                             self_next = self_iter.next()?;
@@ -1550,7 +1685,7 @@ impl<'a, T: Ord, A: Allocator + Clone> Iterator for Difference<'a, T, A> {
             }
             DifferenceInner::Search { self_iter, other_set } => loop {
                 let self_next = self_iter.next()?;
-                if !other_set.contains(&self_next) {
+                if !other_set.contains(self_next) {
                     return Some(self_next);
                 }
             },
@@ -1574,19 +1709,22 @@ impl<'a, T: Ord, A: Allocator + Clone> Iterator for Difference<'a, T, A> {
     }
 }
 
-impl<T: Ord, A: Allocator + Clone> FusedIterator for Difference<'_, T, A> {}
+impl<T: LookupKey<C>, C: Comparator, A: Allocator + Clone> FusedIterator
+    for Difference<'_, T, C, A>
+{
+}
 
-impl<T> Clone for SymmetricDifference<'_, T> {
+impl<T, C> Clone for SymmetricDifference<'_, T, C> {
     fn clone(&self) -> Self {
-        SymmetricDifference(self.0.clone())
+        SymmetricDifference(self.0.clone(), self.1)
     }
 }
-impl<'a, T: Ord> Iterator for SymmetricDifference<'a, T> {
+impl<'a, T: LookupKey<C>, C: Comparator> Iterator for SymmetricDifference<'a, T, C> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
         loop {
-            let (a_next, b_next) = self.0.nexts(Self::Item::cmp);
+            let (a_next, b_next) = self.0.nexts(|&a, &b| self.1.cmp(a.key(), b.key()));
             if a_next.and(b_next).is_none() {
                 return a_next.or(b_next);
             }
@@ -1606,9 +1744,9 @@ impl<'a, T: Ord> Iterator for SymmetricDifference<'a, T> {
     }
 }
 
-impl<T: Ord> FusedIterator for SymmetricDifference<'_, T> {}
+impl<T: LookupKey<C>, C: Comparator> FusedIterator for SymmetricDifference<'_, T, C> {}
 
-impl<T, A: Allocator + Clone> Clone for Intersection<'_, T, A> {
+impl<T, C: Clone, A: Allocator + Clone> Clone for Intersection<'_, T, C, A> {
     fn clone(&self) -> Self {
         Intersection {
             inner: match &self.inner {
@@ -1620,10 +1758,13 @@ impl<T, A: Allocator + Clone> Clone for Intersection<'_, T, A> {
                 }
                 IntersectionInner::Answer(answer) => IntersectionInner::Answer(*answer),
             },
+            comparator: self.comparator,
         }
     }
 }
-impl<'a, T: Ord, A: Allocator + Clone> Iterator for Intersection<'a, T, A> {
+impl<'a, T: LookupKey<C>, C: Comparator, A: Allocator + Clone> Iterator
+    for Intersection<'a, T, C, A>
+{
     type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
@@ -1632,7 +1773,7 @@ impl<'a, T: Ord, A: Allocator + Clone> Iterator for Intersection<'a, T, A> {
                 let mut a_next = a.next()?;
                 let mut b_next = b.next()?;
                 loop {
-                    match a_next.cmp(b_next) {
+                    match self.comparator.cmp(a_next.key(), b_next.key()) {
                         Less => a_next = a.next()?,
                         Greater => b_next = b.next()?,
                         Equal => return Some(a_next),
@@ -1641,7 +1782,7 @@ impl<'a, T: Ord, A: Allocator + Clone> Iterator for Intersection<'a, T, A> {
             }
             IntersectionInner::Search { small_iter, large_set } => loop {
                 let small_next = small_iter.next()?;
-                if large_set.contains(&small_next) {
+                if large_set.contains(small_next) {
                     return Some(small_next);
                 }
             },
@@ -1663,18 +1804,21 @@ impl<'a, T: Ord, A: Allocator + Clone> Iterator for Intersection<'a, T, A> {
     }
 }
 
-impl<T: Ord, A: Allocator + Clone> FusedIterator for Intersection<'_, T, A> {}
+impl<T: LookupKey<C>, C: Comparator, A: Allocator + Clone> FusedIterator
+    for Intersection<'_, T, C, A>
+{
+}
 
-impl<T> Clone for Union<'_, T> {
+impl<T, C> Clone for Union<'_, T, C> {
     fn clone(&self) -> Self {
-        Union(self.0.clone())
+        Union(self.0.clone(), self.1)
     }
 }
-impl<'a, T: Ord> Iterator for Union<'a, T> {
+impl<'a, T: LookupKey<C>, C: Comparator> Iterator for Union<'a, T, C> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
-        let (a_next, b_next) = self.0.nexts(Self::Item::cmp);
+        let (a_next, b_next) = self.0.nexts(|&a, &b| self.1.cmp(a.key(), b.key()));
         a_next.or(b_next)
     }
 
@@ -1689,7 +1833,7 @@ impl<'a, T: Ord> Iterator for Union<'a, T> {
     }
 }
 
-impl<T: Ord> FusedIterator for Union<'_, T> {}
+impl<T: LookupKey<C>, C: Comparator> FusedIterator for Union<'_, T, C> {}
 
 #[cfg(test)]
 mod tests;

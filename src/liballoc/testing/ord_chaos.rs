@@ -1,3 +1,4 @@
+use crate::OrdStoredKey;
 use std::cell::Cell;
 use std::cmp::Ordering::{self, *};
 use std::ptr;
@@ -10,6 +11,10 @@ pub enum Cyclic3 {
     C,
 }
 use Cyclic3::*;
+
+impl OrdStoredKey for Cyclic3 {
+    type DefaultComparisonKey = Self;
+}
 
 impl PartialOrd for Cyclic3 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -56,6 +61,10 @@ impl Governor {
 // that total order.
 #[derive(Debug)]
 pub struct Governed<'a, T>(pub T, pub &'a Governor);
+
+impl<T: Ord> OrdStoredKey for Governed<'_, T> {
+    type DefaultComparisonKey = Self;
+}
 
 impl<T: Ord> PartialOrd for Governed<'_, T> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {

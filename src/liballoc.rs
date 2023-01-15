@@ -2,7 +2,6 @@
     clippy::clone_on_copy,
     clippy::drop_non_drop,
     clippy::needless_borrow,
-    clippy::needless_lifetimes,
     clippy::toplevel_ref_arg,
     clippy::type_complexity,
     clippy::unnecessary_mut_passed,

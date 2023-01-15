@@ -1,7 +1,7 @@
 use super::node::{ForceResult::*, Root};
 use super::search::SearchResult::*;
 use crate::polyfill::*;
-use core::borrow::Borrow;
+use crate::{Comparator, LookupKey};
 
 impl<K, V> Root<K, V> {
     /// Calculates the length of both trees that result from splitting up
@@ -29,9 +29,16 @@ impl<K, V> Root<K, V> {
     /// and if the ordering of `Q` corresponds to that of `K`.
     /// If `self` respects all `BTreeMap` tree invariants, then both
     /// `self` and the returned tree will respect those invariants.
-    pub fn split_off<Q: ?Sized + Ord, A: Allocator + Clone>(&mut self, key: &Q, alloc: A) -> Self
+    pub fn split_off<Q: ?Sized, A: Allocator + Clone, C>(
+        &mut self,
+        key: &Q,
+        comparator: &C,
+        alloc: A,
+    ) -> Self
     where
-        K: Borrow<Q>,
+        K: LookupKey<C>,
+        Q: LookupKey<C>,
+        C: Comparator,
     {
         let left_root = self;
         let mut right_root = Root::new_pillar(left_root.height(), alloc.clone());
@@ -39,7 +46,7 @@ impl<K, V> Root<K, V> {
         let mut right_node = right_root.borrow_mut();
 
         loop {
-            let mut split_edge = match left_node.search_node(key) {
+            let mut split_edge = match left_node.search_node(key, comparator) {
                 // key is going to the right tree
                 Found(kv) => kv.left_edge(),
                 GoDown(edge) => edge,

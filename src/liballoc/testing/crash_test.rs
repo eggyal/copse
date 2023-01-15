@@ -1,4 +1,5 @@
-// We avoid relying on anything else in the crate, apart from the `Debug` trait.
+// We avoid relying on anything else in the crate, apart from the `Debug` and `OrdStoredKey` traits.
+use crate::OrdStoredKey;
 use alloc::fmt::Debug;
 use std::cmp::Ordering;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
@@ -54,6 +55,10 @@ impl CrashTestDummy {
 pub struct Instance<'a> {
     origin: &'a CrashTestDummy,
     panic: Panic,
+}
+
+impl OrdStoredKey for Instance<'_> {
+    type DefaultComparisonKey = Self;
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

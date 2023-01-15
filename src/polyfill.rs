@@ -326,9 +326,9 @@ mod definitions {
     }
 }
 
+#[cfg(test)]
+pub(crate) use definitions::ExactSizeIsEmpty as _;
 pub(crate) use definitions::{
     intrinsics, Allocator, AssumeInit as _, Global, Hasher as _, MaybeUninitSlice as _,
     NewUninit as _, SlicePtrGet as _, SlicePtrGetMut as _,
 };
-#[cfg(test)]
-pub(crate) use definitions::ExactSizeIsEmpty as _;
