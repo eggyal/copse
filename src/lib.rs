@@ -158,12 +158,14 @@ pub trait Comparator {
     /// Tests whether `this == that` under the total order defined by this
     /// comparator.
     #[doc(hidden)]
+    #[inline]
     fn eq(&self, this: &Self::Key, that: &Self::Key) -> bool {
         self.cmp(this, that).is_eq()
     }
     /// Tests whether `this != that` under the total order defined by this
     /// comparator.
     #[doc(hidden)]
+    #[inline]
     fn ne(&self, this: &Self::Key, that: &Self::Key) -> bool {
         self.cmp(this, that).is_ne()
     }
@@ -171,24 +173,28 @@ pub trait Comparator {
     /// Tests whether `this >= that` under the total order defined by this
     /// comparator.
     #[doc(hidden)]
+    #[inline]
     fn ge(&self, this: &Self::Key, that: &Self::Key) -> bool {
         self.cmp(this, that).is_ge()
     }
     /// Tests whether `this > that` under the total order defined by this
     /// comparator.
     #[doc(hidden)]
+    #[inline]
     fn gt(&self, this: &Self::Key, that: &Self::Key) -> bool {
         self.cmp(this, that).is_gt()
     }
     /// Tests whether `this <= that` under the total order defined by this
     /// comparator.
     #[doc(hidden)]
+    #[inline]
     fn le(&self, this: &Self::Key, that: &Self::Key) -> bool {
         self.cmp(this, that).is_le()
     }
     /// Tests whether `this < that` under the total order defined by this
     /// comparator.
     #[doc(hidden)]
+    #[inline]
     fn lt(&self, this: &Self::Key, that: &Self::Key) -> bool {
         self.cmp(this, that).is_lt()
     }
