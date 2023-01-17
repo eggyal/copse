@@ -156,14 +156,18 @@ pub trait Comparator {
     fn cmp(&self, this: &Self::Key, that: &Self::Key) -> Ordering;
 
     /// Tests whether `this == that` under the total order defined by this
-    /// comparator.
+    /// comparator.  It is a logic error for this method to be inconsistent
+    /// with [`Comparator::cmp`], and therefore the default implementation
+    /// should rarely be overriden.
     #[doc(hidden)]
     #[inline]
     fn eq(&self, this: &Self::Key, that: &Self::Key) -> bool {
         self.cmp(this, that).is_eq()
     }
     /// Tests whether `this != that` under the total order defined by this
-    /// comparator.
+    /// comparator.  It is a logic error for this method to be inconsistent
+    /// with [`Comparator::cmp`], and therefore the default implementation
+    /// should rarely be overriden.
     #[doc(hidden)]
     #[inline]
     fn ne(&self, this: &Self::Key, that: &Self::Key) -> bool {
@@ -171,28 +175,36 @@ pub trait Comparator {
     }
 
     /// Tests whether `this >= that` under the total order defined by this
-    /// comparator.
+    /// comparator.  It is a logic error for this method to be inconsistent
+    /// with [`Comparator::cmp`], and therefore the default implementation
+    /// should rarely be overriden.
     #[doc(hidden)]
     #[inline]
     fn ge(&self, this: &Self::Key, that: &Self::Key) -> bool {
         self.cmp(this, that).is_ge()
     }
     /// Tests whether `this > that` under the total order defined by this
-    /// comparator.
+    /// comparator.  It is a logic error for this method to be inconsistent
+    /// with [`Comparator::cmp`], and therefore the default implementation
+    /// should rarely be overriden.
     #[doc(hidden)]
     #[inline]
     fn gt(&self, this: &Self::Key, that: &Self::Key) -> bool {
         self.cmp(this, that).is_gt()
     }
     /// Tests whether `this <= that` under the total order defined by this
-    /// comparator.
+    /// comparator.  It is a logic error for this method to be inconsistent
+    /// with [`Comparator::cmp`], and therefore the default implementation
+    /// should rarely be overriden.
     #[doc(hidden)]
     #[inline]
     fn le(&self, this: &Self::Key, that: &Self::Key) -> bool {
         self.cmp(this, that).is_le()
     }
     /// Tests whether `this < that` under the total order defined by this
-    /// comparator.
+    /// comparator.  It is a logic error for this method to be inconsistent
+    /// with [`Comparator::cmp`], and therefore the default implementation
+    /// should rarely be overriden.
     #[doc(hidden)]
     #[inline]
     fn lt(&self, this: &Self::Key, that: &Self::Key) -> bool {
