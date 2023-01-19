@@ -3,9 +3,9 @@ name = "copse"
 version = "0.3.0"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/eggyal/copse.git"
-description = "Direct ports of the standard library's B-Tree collections, but that sort according to a specified total order rather than the `Ord` trait"
+description = "Direct ports of the standard library's BTreeMap, BTreeSet and BinaryHeap collections, but that sort according to a specified total order rather than the `Ord` trait"
 edition = "2021"
-keywords = ["b-tree", "collections", "map", "set", "runtime"]
+keywords = ["b-tree", "collections", "binary-heap", "runtime"]
 categories = ["data-structures", "no-std"]
 
 [features]
