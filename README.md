@@ -68,23 +68,26 @@ library instead.
 # Crate feature flags
 This crate defines a number of feature flags, none of which are enabled by default:
 
-* the `std` feature provides [`OrdStoredKey`] implementations for some libstd types
-  that are not available in libcore + liballoc, namely [`OsString`] and [`PathBuf`];
+* the `std` feature provides [`OrdStoredKey`] implementations for some standard library
+  types that are not present in libcore + liballoc, namely [`OsString`], [`OsStr`],
+  [`PathBuf`] and [`Path`];
 
-* the `unstable` feature enables all unstable features of the stdlib's BTree and
-  BinaryHeap collection implementations that are purely contained therein, and which
-  therefore do not require a nightly toolchain.
+* each feature in the `unstable` set corresponds to the like-named unstable feature in
+  the standard library's B-Tree and BinaryHeap collection implementations, all of which
+  enable APIs that are wholly contained within the library and therefore do not require
+  a nightly toolchain;
 
-* the `btreemap_alloc` feature enables the like-named unstable compiler feature, thus
-  exposing the collections' `new_in` methods; however this feature depends upon the
-  `allocator_api` unstable compiler feature that is only available with a nightly
-  toolchain.
+* the `btreemap_alloc` feature corresponds to the like-named unstable feature in the
+  standard library's B-Tree collection implementations (namely that which enables their
+  `new_in` associated functions)—however (as of rustc v1.66.1) this feature requires
+  the `allocator_api` unstable compiler feature that is only available with a nightly
+  toolchain; and
 
-* the `nightly` feature enables all other crate features, each of which enables the
-  like-named unstable compiler feature that is used by the standard library's collection
-  implementations (and which therefore require a nightly compiler)—most such behaviour
-  is polyfilled when the features are disabled, so they should rarely be required, but
-  they are nevertheless included to ease tracking of the stdlib implementations.
+* all other features (combined into the `nightly` set) do not affect the APIs presented
+  by this crate, but instead switch the implementation to use those features internally
+  as are used by the standard library's implementations—these features should be of
+  little use or interest to library users, but are nevertheless included to ease
+  synchronisation with the standard library.
 
 [std::collections::BTreeMap]: https://doc.rust-lang.org/std/collections/struct.BTreeMap.html
 [std::collections::BTreeSet]: https://doc.rust-lang.org/std/collections/struct.BTreeSet.html
@@ -94,7 +97,9 @@ This crate defines a number of feature flags, none of which are enabled by defau
 [`Borrow<Q>`]: https://doc.rust-lang.org/std/borrow/trait.Borrow.html
 [`Ord::cmp`]: https://doc.rust-lang.org/std/cmp/trait.Ord.html#tymethod.cmp
 [`OsString`]: https://doc.rust-lang.org/std/ffi/os_str/struct.OsString.html
+[`OsStr`]: https://doc.rust-lang.org/std/ffi/os_str/struct.OsStr.html
 [`PathBuf`]: https://doc.rust-lang.org/std/path/struct.PathBuf.html
+[`Path`]: https://doc.rust-lang.org/std/path/struct.Path.html
 
 [`TotalOrder`]: https://docs.rs/copse/latest/copse/trait.TotalOrder.html
 [TotalOrder::OrderedType]: https://docs.rs/copse/latest/copse/trait.TotalOrder.html#associatedtype.OrderedType
