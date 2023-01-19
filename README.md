@@ -15,8 +15,9 @@ order.
 
 However, copse's collections do not use the [`Ord`] trait; instead, lookups can only ever
 be performed using the [`TotalOrder`] supplied upon collection creation.  This total order
-can only compare values of its [`Key`][TotalOrder::Key] associated type, and hence keys used
-for lookups must implement [`LookupKey<O>`] in order that the conversion can be performed.
+can only compare values of its [`OrderedType`][TotalOrder::OrderedType] associated type,
+and hence keys used for lookups must implement [`LookupKey<O>`] in order that the
+conversion can be performed.
 
 # Example
 ```rust
@@ -26,7 +27,7 @@ struct OrderByNthByte {
 }
 
 impl TotalOrder for OrderByNthByte {
-    type Key = [u8];
+    type OrderedType = [u8];
     fn cmp(&self, this: &[u8], that: &[u8]) -> Ordering {
         match (this.get(self.n), that.get(self.n)) {
             (Some(lhs), Some(rhs)) => lhs.cmp(rhs),
@@ -96,7 +97,7 @@ This crate defines a number of feature flags, none of which are enabled by defau
 [`PathBuf`]: https://doc.rust-lang.org/std/path/struct.PathBuf.html
 
 [`TotalOrder`]: https://docs.rs/copse/latest/copse/trait.TotalOrder.html
-[TotalOrder::Key]: https://docs.rs/copse/latest/copse/trait.TotalOrder.html#associatedtype.Key
+[TotalOrder::OrderedType]: https://docs.rs/copse/latest/copse/trait.TotalOrder.html#associatedtype.OrderedType
 [`LookupKey<O>`]: https://docs.rs/copse/latest/copse/trait.LookupKey.html
 [`OrdTotalOrder`]: https://docs.rs/copse/latest/copse/struct.OrdTotalOrder.html
 [`OrdStoredKey`]: https://docs.rs/copse/latest/copse/trait.OrdStoredKey.html

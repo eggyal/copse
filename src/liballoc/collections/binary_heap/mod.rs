@@ -30,7 +30,7 @@
 //! struct ReversedCostOrder;
 //!
 //! impl TotalOrder for ReversedCostOrder {
-//!     type Key = State;
+//!     type OrderedType = State;
 //!     fn cmp(&self, this: &State, that: &State) -> Ordering {
 //!         // Notice that the we flip the ordering on costs.
 //!         that.cost.cmp(&this.cost)
@@ -243,7 +243,7 @@ mod tests;
 ///
 /// struct ReversedOrder;
 /// impl TotalOrder for ReversedOrder {
-///     type Key = i32;
+///     type OrderedType = i32;
 ///     fn cmp(&self, this: &i32, that: &i32) -> Ordering {
 ///         that.cmp(this)
 ///     }

@@ -319,7 +319,7 @@ impl<T, O> BTreeSet<T, O> {
     ///
     /// impl TotalOrder for OrderByNthByte {
     ///     // etc
-    /// #     type Key = [u8];
+    /// #     type OrderedType = [u8];
     /// #     fn cmp(&self, this: &[u8], that: &[u8]) -> Ordering {
     /// #         match (this.get(self.n), that.get(self.n)) {
     /// #             (Some(lhs), Some(rhs)) => lhs.cmp(rhs),

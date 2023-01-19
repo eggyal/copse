@@ -15,8 +15,9 @@
 //!
 //! However, copse's collections do not use the [`Ord`] trait; instead, lookups can only ever
 //! be performed using the [`TotalOrder`] supplied upon collection creation.  This total order
-//! can only compare values of its [`Key`][TotalOrder::Key] associated type, and hence keys used
-//! for lookups must implement [`LookupKey<O>`] in order that the conversion can be performed.
+//! can only compare values of its [`OrderedType`][TotalOrder::OrderedType] associated type,
+//! and hence keys used for lookups must implement [`LookupKey<O>`] in order that the
+//! conversion can be performed.
 //!
 //! # Example
 //! ```rust
@@ -29,7 +30,7 @@
 //! }
 //!
 //! impl TotalOrder for OrderByNthByte {
-//!     type Key = [u8];
+//!     type OrderedType = [u8];
 //!     fn cmp(&self, this: &[u8], that: &[u8]) -> Ordering {
 //!         match (this.get(self.n), that.get(self.n)) {
 //!             (Some(lhs), Some(rhs)) => lhs.cmp(rhs),
@@ -144,25 +145,25 @@ pub use btree_map::BTreeMap;
 #[doc(no_inline)]
 pub use btree_set::BTreeSet;
 
-/// An immutable strict [total order] over the associated type `Key`.
+/// An immutable strict [total order] over the associated type `OrderedType`.
 /// 
 /// [total order]: https://en.wikipedia.org/wiki/Total_order
 pub trait TotalOrder {
     /// The type over which this total order is defined.
-    type Key: ?Sized;
+    type OrderedType: ?Sized;
 
     /// Compare two values and return the position of `this` relative
     /// to `that` according to this total order.
     ///
     /// The comparison must satisfy both transitivity and duality.
-    fn cmp(&self, this: &Self::Key, that: &Self::Key) -> Ordering;
+    fn cmp(&self, this: &Self::OrderedType, that: &Self::OrderedType) -> Ordering;
 
     /// Tests whether `this == that` under this total order.  It is a logic
     /// error for this method to be inconsistent with [`TotalOrder::cmp`],
     /// and therefore the default implementation should rarely be overriden.
     #[doc(hidden)]
     #[inline]
-    fn eq(&self, this: &Self::Key, that: &Self::Key) -> bool {
+    fn eq(&self, this: &Self::OrderedType, that: &Self::OrderedType) -> bool {
         self.cmp(this, that).is_eq()
     }
     /// Tests whether `this != that` under this total order.  It is a logic
@@ -170,7 +171,7 @@ pub trait TotalOrder {
     /// and therefore the default implementation should rarely be overriden.
     #[doc(hidden)]
     #[inline]
-    fn ne(&self, this: &Self::Key, that: &Self::Key) -> bool {
+    fn ne(&self, this: &Self::OrderedType, that: &Self::OrderedType) -> bool {
         self.cmp(this, that).is_ne()
     }
 
@@ -179,7 +180,7 @@ pub trait TotalOrder {
     /// and therefore the default implementation should rarely be overriden.
     #[doc(hidden)]
     #[inline]
-    fn ge(&self, this: &Self::Key, that: &Self::Key) -> bool {
+    fn ge(&self, this: &Self::OrderedType, that: &Self::OrderedType) -> bool {
         self.cmp(this, that).is_ge()
     }
     /// Tests whether `this > that` under this total order.  It is a logic
@@ -187,7 +188,7 @@ pub trait TotalOrder {
     /// and therefore the default implementation should rarely be overriden.
     #[doc(hidden)]
     #[inline]
-    fn gt(&self, this: &Self::Key, that: &Self::Key) -> bool {
+    fn gt(&self, this: &Self::OrderedType, that: &Self::OrderedType) -> bool {
         self.cmp(this, that).is_gt()
     }
     /// Tests whether `this <= that` under this total order.  It is a logic
@@ -195,7 +196,7 @@ pub trait TotalOrder {
     /// and therefore the default implementation should rarely be overriden.
     #[doc(hidden)]
     #[inline]
-    fn le(&self, this: &Self::Key, that: &Self::Key) -> bool {
+    fn le(&self, this: &Self::OrderedType, that: &Self::OrderedType) -> bool {
         self.cmp(this, that).is_le()
     }
     /// Tests whether `this < that` under this total order.  It is a logic
@@ -203,7 +204,7 @@ pub trait TotalOrder {
     /// and therefore the default implementation should rarely be overriden.
     #[doc(hidden)]
     #[inline]
-    fn lt(&self, this: &Self::Key, that: &Self::Key) -> bool {
+    fn lt(&self, this: &Self::OrderedType, that: &Self::OrderedType) -> bool {
         self.cmp(this, that).is_lt()
     }
 }
@@ -227,7 +228,7 @@ impl<T: ?Sized + Ord> Clone for OrdTotalOrder<T> {
 impl<T: ?Sized + Ord> Copy for OrdTotalOrder<T> {}
 
 impl<T: ?Sized + Ord> TotalOrder for OrdTotalOrder<T> {
-    type Key = T;
+    type OrderedType = T;
 
     fn cmp(&self, this: &T, that: &T) -> Ordering {
         this.cmp(that)
@@ -264,7 +265,7 @@ impl<T: ?Sized + Ord> TotalOrder for OrdTotalOrder<T> {
 /// reflexive/no-op case, which will almost always be desirable.**
 pub trait LookupKey<O: TotalOrder> {
     /// Return the key by which `self` is ordered under total orders of type `O`.
-    fn key(&self) -> &C::Key;
+    fn key(&self) -> &O::OrderedType;
 }
 
 impl<T: ?Sized + Ord, K: ?Sized + Borrow<T>> LookupKey<OrdTotalOrder<T>> for K {
