@@ -1,7 +1,10 @@
 // This is pretty much entirely stolen from TreeSet, since BTreeMap has an identical interface
 // to TreeMap
 
-use crate::{LookupKey, OrdStoredKey, OrdTotalOrder, TotalOrder};
+use crate::{
+    default::{OrdStoredKey, OrdTotalOrder},
+    LookupKey, TotalOrder,
+};
 use alloc::vec::Vec;
 use core::cmp::Ordering::{self, Equal, Greater, Less};
 use core::cmp::{max, min};
@@ -382,7 +385,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
             ///
             /// ```
             /// # #![feature(allocator_api)]
-            /// use copse::{BTreeSet, OrdTotalOrder};
+            /// use copse::{BTreeSet, default::OrdTotalOrder};
             /// use std::alloc::Global;
             ///
             /// let mut set = BTreeSet::<_>::new_in(OrdTotalOrder::default(), Global);

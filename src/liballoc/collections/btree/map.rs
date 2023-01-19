@@ -9,7 +9,11 @@ use core::mem::{self, ManuallyDrop};
 use core::ops::{Index, RangeBounds};
 use core::ptr;
 
-use crate::{polyfill::*, LookupKey, OrdStoredKey, OrdTotalOrder, TotalOrder};
+use crate::{
+    default::{OrdStoredKey, OrdTotalOrder},
+    polyfill::*,
+    LookupKey, TotalOrder,
+};
 
 use super::borrow::DormantMutRef;
 use super::dedup_sorted_iter::DedupSortedIter;
@@ -652,7 +656,7 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
             ///
             /// ```
             /// # #![feature(allocator_api)]
-            /// use copse::{BTreeMap, OrdTotalOrder};
+            /// use copse::{BTreeMap, default::OrdTotalOrder};
             /// use std::alloc::Global;
             ///
             /// let mut map = BTreeMap::new_in(OrdTotalOrder::default(), Global);

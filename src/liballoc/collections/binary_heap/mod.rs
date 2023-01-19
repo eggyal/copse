@@ -154,7 +154,10 @@ use alloc::vec::{self, Vec};
 use cfg_if::cfg_if;
 
 use super::SpecExtend;
-use crate::{LookupKey, OrdStoredKey, OrdTotalOrder, TotalOrder};
+use crate::{
+    default::{OrdStoredKey, OrdTotalOrder},
+    LookupKey, TotalOrder,
+};
 
 #[cfg(test)]
 mod tests;
