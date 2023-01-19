@@ -1,9 +1,9 @@
 Direct ports of the standard library's [`BTreeMap`][std::collections::BTreeMap],
 [`BTreeSet`][std::collections::BTreeSet] and [`BinaryHeap`][std::collections::BinaryHeap]
-collections, but which sort according to a specified [`Comparator`] rather than relying upon
+collections, but which sort according to a specified [`TotalOrder`] rather than relying upon
 the [`Ord`] trait.
 
-This is primarily useful when the [`Comparator`] depends upon runtime state, and therefore
+This is primarily useful when the [`TotalOrder`] depends upon runtime state, and therefore
 cannot be provided as an [`Ord`] implementation for any type.
 
 # Lookup keys
@@ -14,18 +14,18 @@ possible because the [`Borrow`] trait stipulates that borrowed values must prese
 order.
 
 However, copse's collections do not use the [`Ord`] trait; instead, lookups can only ever
-be performed using the [`Comparator`] supplied upon collection creation.  This comparator
-can only compare values of its [`Key`][Comparator::Key] associated type, and hence keys used
-for lookups must implement [`LookupKey<C>`] in order that the conversion can be performed.
+be performed using the [`TotalOrder`] supplied upon collection creation.  This total order
+can only compare values of its [`Key`][TotalOrder::Key] associated type, and hence keys used
+for lookups must implement [`LookupKey<O>`] in order that the conversion can be performed.
 
 # Example
 ```rust
-// define a comparator
-struct NthByteComparator {
+// define a total order
+struct OrderByNthByte {
     n: usize, // runtime state
 }
 
-impl Comparator for NthByteComparator {
+impl TotalOrder for OrderByNthByte {
     type Key = [u8];
     fn cmp(&self, this: &[u8], that: &[u8]) -> Ordering {
         match (this.get(self.n), that.get(self.n)) {
@@ -37,19 +37,19 @@ impl Comparator for NthByteComparator {
     }
 }
 
-// define lookup key types for collections sorted by our comparator
-impl LookupKey<NthByteComparator> for [u8] {
+// define lookup key types for collections sorted by our total order
+impl LookupKey<OrderByNthByte> for [u8] {
     fn key(&self) -> &[u8] { self }
 }
-impl LookupKey<NthByteComparator> for str {
+impl LookupKey<OrderByNthByte> for str {
     fn key(&self) -> &[u8] { self.as_bytes() }
 }
-impl LookupKey<NthByteComparator> for String {
-    fn key(&self) -> &[u8] { LookupKey::<NthByteComparator>::key(self.as_str()) }
+impl LookupKey<OrderByNthByte> for String {
+    fn key(&self) -> &[u8] { LookupKey::<OrderByNthByte>::key(self.as_str()) }
 }
 
-// create a collection using our comparator
-let mut set = BTreeSet::new(NthByteComparator { n: 9 });
+// create a collection using our total order
+let mut set = BTreeSet::new(OrderByNthByte { n: 9 });
 assert!(set.insert("abcdefghijklm".to_string()));
 assert!(!set.insert("xxxxxxxxxjxx".to_string()));
 assert!(set.contains("jjjjjjjjjj"));
@@ -57,12 +57,12 @@ assert!(set.contains("jjjjjjjjjj"));
 
 # Collection type parameters
 In addition to the type parameters familiar from the standard library collections, copse's
-collections are additionally parameterised by the type of the [`Comparator`].  If the
-comparator type is not explicitly named, it defaults to the [`OrdComparator`] for the
-storage key's [`DefaultComparisonKey`][OrdStoredKey::DefaultComparisonKey], which yields
-behaviour analagous to the standard library collections (i.e. sorted by the `Ord` trait).
-If you find yourself using these items, then you should probably ditch copse for the
-standard library instead.
+collections are additionally parameterised by the type of the [`TotalOrder`].  If the
+total order is not explicitly named, it defaults to the [`OrdTotalOrder`] for the storage
+key's [`DefaultComparisonKey`][OrdStoredKey::DefaultComparisonKey], which yields behaviour
+analagous to the standard library collections (i.e. sorted by the `Ord` trait).  If you
+find yourself using these items, then you should probably ditch copse for the standard
+library instead.
 
 # Crate feature flags
 This crate defines a number of feature flags, none of which are enabled by default:
@@ -95,9 +95,9 @@ This crate defines a number of feature flags, none of which are enabled by defau
 [`OsString`]: https://doc.rust-lang.org/std/ffi/os_str/struct.OsString.html
 [`PathBuf`]: https://doc.rust-lang.org/std/path/struct.PathBuf.html
 
-[`Comparator`]: https://docs.rs/copse/latest/copse/trait.Comparator.html
-[Comparator::Key]: https://docs.rs/copse/latest/copse/trait.Comparator.html#associatedtype.Key
-[`LookupKey<C>`]: https://docs.rs/copse/latest/copse/trait.LookupKey.html
-[`OrdComparator`]: https://docs.rs/copse/latest/copse/struct.OrdComparator.html
+[`TotalOrder`]: https://docs.rs/copse/latest/copse/trait.TotalOrder.html
+[TotalOrder::Key]: https://docs.rs/copse/latest/copse/trait.TotalOrder.html#associatedtype.Key
+[`LookupKey<O>`]: https://docs.rs/copse/latest/copse/trait.LookupKey.html
+[`OrdTotalOrder`]: https://docs.rs/copse/latest/copse/struct.OrdTotalOrder.html
 [`OrdStoredKey`]: https://docs.rs/copse/latest/copse/trait.OrdStoredKey.html
 [OrdStoredKey::DefaultComparisonKey]: https://docs.rs/copse/latest/copse/trait.OrdStoredKey.html#associatedtype.DefaultComparisonKey

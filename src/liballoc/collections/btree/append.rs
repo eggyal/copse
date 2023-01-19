@@ -21,13 +21,13 @@ impl<K, V> Root<K, V> {
         left: I,
         right: I,
         length: &mut usize,
-        comparator: impl Fn(&(K, V), &(K, V)) -> Ordering,
+        order: impl Fn(&(K, V), &(K, V)) -> Ordering,
         alloc: A,
     ) where
         I: Iterator<Item = (K, V)> + FusedIterator,
     {
         // We prepare to merge `left` and `right` into a sorted sequence in linear time.
-        let iter = MergeIter(MergeIterInner::new(left, right), comparator);
+        let iter = MergeIter(MergeIterInner::new(left, right), order);
 
         // Meanwhile, we build a tree from the sorted sequence in linear time.
         self.bulk_push(iter, length, alloc)
@@ -92,11 +92,11 @@ impl<K, V> Root<K, V> {
 }
 
 // An iterator for merging two sorted sequences into one
-struct MergeIter<K, V, C, I: Iterator<Item = (K, V)>>(MergeIterInner<I>, C);
+struct MergeIter<K, V, O, I: Iterator<Item = (K, V)>>(MergeIterInner<I>, O);
 
-impl<K, V, C, I> Iterator for MergeIter<K, V, C, I>
+impl<K, V, O, I> Iterator for MergeIter<K, V, O, I>
 where
-    C: Fn(&(K, V), &(K, V)) -> Ordering,
+    O: Fn(&(K, V), &(K, V)) -> Ordering,
     I: Iterator<Item = (K, V)> + FusedIterator,
 {
     type Item = (K, V);

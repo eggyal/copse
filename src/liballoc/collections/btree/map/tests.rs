@@ -102,7 +102,7 @@ impl<K: OrdStoredKey, V> BTreeMap<K, V> {
         if let Some(mut previous) = keys.next() {
             for next in keys {
                 assert!(
-                    self.comparator.lt(previous.key(), next.key()),
+                    self.order.lt(previous.key(), next.key()),
                     "{:?} >= {:?}",
                     previous.key(),
                     next.key()
@@ -814,7 +814,7 @@ fn test_range_finding_ill_order_in_range_ord() {
     #[derive(PartialEq, Eq, PartialOrd, Ord)]
     struct CompositeKey(i32, EvilTwin);
 
-    impl LookupKey<OrdComparator<EvilTwin>> for CompositeKey {
+    impl LookupKey<OrdTotalOrder<EvilTwin>> for CompositeKey {
         fn key(&self) -> &EvilTwin {
             &self.1
         }
@@ -1290,47 +1290,47 @@ fn test_borrow() {
     }
 
     #[allow(dead_code)]
-    fn get<T: Ord>(v: &BTreeMap<Box<T>, (), OrdComparator<T>>, t: &T) {
+    fn get<T: Ord>(v: &BTreeMap<Box<T>, (), OrdTotalOrder<T>>, t: &T) {
         let _ = v.get(t);
     }
 
     #[allow(dead_code)]
-    fn get_mut<T: Ord>(v: &mut BTreeMap<Box<T>, (), OrdComparator<T>>, t: &T) {
+    fn get_mut<T: Ord>(v: &mut BTreeMap<Box<T>, (), OrdTotalOrder<T>>, t: &T) {
         let _ = v.get_mut(t);
     }
 
     #[allow(dead_code)]
-    fn get_key_value<T: Ord>(v: &BTreeMap<Box<T>, (), OrdComparator<T>>, t: &T) {
+    fn get_key_value<T: Ord>(v: &BTreeMap<Box<T>, (), OrdTotalOrder<T>>, t: &T) {
         let _ = v.get_key_value(t);
     }
 
     #[allow(dead_code)]
-    fn contains_key<T: Ord>(v: &BTreeMap<Box<T>, (), OrdComparator<T>>, t: &T) {
+    fn contains_key<T: Ord>(v: &BTreeMap<Box<T>, (), OrdTotalOrder<T>>, t: &T) {
         let _ = v.contains_key(t);
     }
 
     #[allow(dead_code)]
-    fn range<T: Ord>(v: &BTreeMap<Box<T>, (), OrdComparator<T>>, t: T) {
+    fn range<T: Ord>(v: &BTreeMap<Box<T>, (), OrdTotalOrder<T>>, t: T) {
         let _ = v.range(t..);
     }
 
     #[allow(dead_code)]
-    fn range_mut<T: Ord>(v: &mut BTreeMap<Box<T>, (), OrdComparator<T>>, t: T) {
+    fn range_mut<T: Ord>(v: &mut BTreeMap<Box<T>, (), OrdTotalOrder<T>>, t: T) {
         let _ = v.range_mut(t..);
     }
 
     #[allow(dead_code)]
-    fn remove<T: Ord>(v: &mut BTreeMap<Box<T>, (), OrdComparator<T>>, t: &T) {
+    fn remove<T: Ord>(v: &mut BTreeMap<Box<T>, (), OrdTotalOrder<T>>, t: &T) {
         v.remove(t);
     }
 
     #[allow(dead_code)]
-    fn remove_entry<T: Ord>(v: &mut BTreeMap<Box<T>, (), OrdComparator<T>>, t: &T) {
+    fn remove_entry<T: Ord>(v: &mut BTreeMap<Box<T>, (), OrdTotalOrder<T>>, t: &T) {
         v.remove_entry(t);
     }
 
     #[allow(dead_code)]
-    fn split_off<T: Ord>(v: &mut BTreeMap<Box<T>, (), OrdComparator<T>>, t: &T) {
+    fn split_off<T: Ord>(v: &mut BTreeMap<Box<T>, (), OrdTotalOrder<T>>, t: &T) {
         v.split_off(t);
     }
 }
@@ -1807,7 +1807,7 @@ fn assert_send() {
 
 #[test]
 fn test_ord_absence() {
-    fn map<K, C: Clone>(mut map: BTreeMap<K, (), C>) {
+    fn map<K, O: Clone>(mut map: BTreeMap<K, (), O>) {
         let _ = map.is_empty();
         let _ = map.len();
         map.clear();
@@ -1825,7 +1825,7 @@ fn test_ord_absence() {
         }
     }
 
-    fn map_debug<K: Debug, C>(mut map: BTreeMap<K, (), C>) {
+    fn map_debug<K: Debug, O>(mut map: BTreeMap<K, (), O>) {
         format!("{map:?}");
         format!("{:?}", map.iter());
         format!("{:?}", map.iter_mut());
@@ -1841,7 +1841,7 @@ fn test_ord_absence() {
         }
     }
 
-    fn map_clone<K: Clone, C: Clone>(mut map: BTreeMap<K, (), C>) {
+    fn map_clone<K: Clone, O: Clone>(mut map: BTreeMap<K, (), O>) {
         map.clone_from(&map.clone());
     }
 
@@ -2281,7 +2281,7 @@ fn test_into_iter_drop_leak_height_0() {
     let c = CrashTestDummy::new(2);
     let d = CrashTestDummy::new(3);
     let e = CrashTestDummy::new(4);
-    let mut map = BTreeMap::<_, _, OrdComparator<str>>::default();
+    let mut map = BTreeMap::<_, _, OrdTotalOrder<str>>::default();
     map.insert("a", a.spawn(Panic::Never));
     map.insert("b", b.spawn(Panic::Never));
     map.insert("c", c.spawn(Panic::Never));

@@ -1,4 +1,4 @@
-use crate::{Comparator, LookupKey};
+use crate::{LookupKey, TotalOrder};
 use core::hint;
 use core::ops::RangeBounds;
 use core::ptr;
@@ -249,18 +249,18 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
     /// # Safety
     /// Unless `BorrowType` is `Immut`, do not use the handles to visit the same
     /// KV twice.
-    unsafe fn find_leaf_edges_spanning_range<Q: ?Sized, R, C>(
+    unsafe fn find_leaf_edges_spanning_range<Q: ?Sized, R, O>(
         self,
-        comparator: &C,
+        order: &O,
         range: R,
     ) -> LeafRange<BorrowType, K, V>
     where
-        K: LookupKey<C>,
-        Q: LookupKey<C>,
+        K: LookupKey<O>,
+        Q: LookupKey<O>,
         R: RangeBounds<Q>,
-        C: Comparator,
+        O: TotalOrder,
     {
-        match self.search_tree_for_bifurcation(comparator, &range) {
+        match self.search_tree_for_bifurcation(order, &range) {
             Err(_) => LeafRange::none(),
             Ok((
                 node,
@@ -276,9 +276,9 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
                         (Leaf(f), Leaf(b)) => return LeafRange { front: Some(f), back: Some(b) },
                         (Internal(f), Internal(b)) => {
                             (lower_edge, lower_child_bound) =
-                                f.descend().find_lower_bound_edge(comparator, lower_child_bound);
+                                f.descend().find_lower_bound_edge(order, lower_child_bound);
                             (upper_edge, upper_child_bound) =
-                                b.descend().find_upper_bound_edge(comparator, upper_child_bound);
+                                b.descend().find_upper_bound_edge(order, upper_child_bound);
                         }
                         _ => unreachable!("BTreeMap has different depths"),
                     }
@@ -303,19 +303,15 @@ impl<'a, K: 'a, V: 'a> NodeRef<marker::Immut<'a>, K, V, marker::LeafOrInternal> 
     ///
     /// The result is meaningful only if the tree is ordered by key, like the tree
     /// in a `BTreeMap` is.
-    pub fn range_search<Q, R, C>(
-        self,
-        comparator: &C,
-        range: R,
-    ) -> LeafRange<marker::Immut<'a>, K, V>
+    pub fn range_search<Q, R, O>(self, order: &O, range: R) -> LeafRange<marker::Immut<'a>, K, V>
     where
-        K: LookupKey<C>,
-        Q: ?Sized + LookupKey<C>,
+        K: LookupKey<O>,
+        Q: ?Sized + LookupKey<O>,
         R: RangeBounds<Q>,
-        C: Comparator,
+        O: TotalOrder,
     {
         // SAFETY: our borrow type is immutable.
-        unsafe { self.find_leaf_edges_spanning_range(comparator, range) }
+        unsafe { self.find_leaf_edges_spanning_range(order, range) }
     }
 
     /// Finds the pair of leaf edges delimiting an entire tree.
@@ -334,18 +330,14 @@ impl<'a, K: 'a, V: 'a> NodeRef<marker::ValMut<'a>, K, V, marker::LeafOrInternal>
     ///
     /// # Safety
     /// Do not use the duplicate handles to visit the same KV twice.
-    pub fn range_search<Q, R, C>(
-        self,
-        comparator: &C,
-        range: R,
-    ) -> LeafRange<marker::ValMut<'a>, K, V>
+    pub fn range_search<Q, R, O>(self, order: &O, range: R) -> LeafRange<marker::ValMut<'a>, K, V>
     where
-        K: LookupKey<C>,
-        Q: ?Sized + LookupKey<C>,
+        K: LookupKey<O>,
+        Q: ?Sized + LookupKey<O>,
         R: RangeBounds<Q>,
-        C: Comparator,
+        O: TotalOrder,
     {
-        unsafe { self.find_leaf_edges_spanning_range(comparator, range) }
+        unsafe { self.find_leaf_edges_spanning_range(order, range) }
     }
 
     /// Splits a unique reference into a pair of leaf edges delimiting the full range of the tree.

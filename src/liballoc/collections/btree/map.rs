@@ -9,7 +9,7 @@ use core::mem::{self, ManuallyDrop};
 use core::ops::{Index, RangeBounds};
 use core::ptr;
 
-use crate::{polyfill::*, Comparator, LookupKey, OrdComparator, OrdStoredKey};
+use crate::{polyfill::*, LookupKey, OrdStoredKey, OrdTotalOrder, TotalOrder};
 
 use super::borrow::DormantMutRef;
 use super::dedup_sorted_iter::DedupSortedIter;
@@ -65,12 +65,13 @@ pub(super) const MIN_LEN: usize = node::MIN_LEN_AFTER_SPLIT;
 /// to take B * log(n) comparisons, which is generally worse than a BST. In practice,
 /// however, performance is excellent.
 ///
-/// It is a logic error for a key to be modified in such a way that the key's ordering relative to
-/// any other key, as determined by the comparator function, changes while it is in the map. This is
-/// normally only possible through [`Cell`], [`RefCell`], global state, I/O, or unsafe code.
-/// The behavior resulting from such a logic error is not specified, but will be encapsulated to the
-/// `BTreeMap` that observed the logic error and not result in undefined behavior. This could
-/// include panics, incorrect results, aborts, memory leaks, and non-termination.
+/// It is a logic error for a key or total order to be modified in such a way that the key's
+/// ordering relative to any other key, as determined by that total order, changes while they are
+/// in the map. This is normally only possible through [`Cell`], [`RefCell`], global state, I/O,
+/// or unsafe code. The behavior resulting from such a logic error is not specified, but will be
+/// encapsulated to the `BTreeMap` that observed the logic error and not result in undefined
+/// behavior. This could include panics, incorrect results, aborts, memory leaks, and
+/// non-termination.
 ///
 /// Iterators obtained from functions such as [`BTreeMap::iter`], [`BTreeMap::values`], or
 /// [`BTreeMap::keys`] produce their items in order by key, and take worst-case logarithmic and
@@ -171,12 +172,12 @@ pub(super) const MIN_LEN: usize = node::MIN_LEN_AFTER_SPLIT;
 pub struct BTreeMap<
     K,
     V,
-    C = OrdComparator<<K as OrdStoredKey>::DefaultComparisonKey>,
+    O = OrdTotalOrder<<K as OrdStoredKey>::DefaultComparisonKey>,
     A: Allocator + Clone = Global,
 > {
     root: Option<Root<K, V>>,
     length: usize,
-    pub(super) comparator: C,
+    pub(super) order: O,
     /// `ManuallyDrop` to control drop order (needs to be dropped after all the nodes).
     pub(super) alloc: ManuallyDrop<A>,
     // For dropck; the `Box` avoids making the `Unpin` impl more strict than before
@@ -185,15 +186,15 @@ pub struct BTreeMap<
 
 cfg_if! {
     if #[cfg(feature = "dropck_eyepatch")] {
-        unsafe impl<#[may_dangle] K, #[may_dangle] V, C, A: Allocator + Clone> Drop
-            for BTreeMap<K, V, C, A>
+        unsafe impl<#[may_dangle] K, #[may_dangle] V, O, A: Allocator + Clone> Drop
+            for BTreeMap<K, V, O, A>
         {
             fn drop(&mut self) {
                 drop(unsafe { ptr::read(self) }.into_iter())
             }
         }
     } else {
-        impl<K, V, C, A: Allocator + Clone> Drop for BTreeMap<K, V, C, A> {
+        impl<K, V, O, A: Allocator + Clone> Drop for BTreeMap<K, V, O, A> {
             fn drop(&mut self) {
                 drop(unsafe { ptr::read(self) }.into_iter())
             }
@@ -205,7 +206,7 @@ cfg_if! {
 // (The bounds of the automatic `UnwindSafe` implementation have been like this since Rust 1.50.)
 // Maybe we can fix it nonetheless with a crater run, or if the `UnwindSafe`
 // traits are deprecated, or disarmed (no longer causing hard errors) in the future.
-impl<K, V, C, A: Allocator + Clone> core::panic::UnwindSafe for BTreeMap<K, V, C, A>
+impl<K, V, O, A: Allocator + Clone> core::panic::UnwindSafe for BTreeMap<K, V, O, A>
 where
     A: core::panic::UnwindSafe,
     K: core::panic::RefUnwindSafe,
@@ -213,13 +214,13 @@ where
 {
 }
 
-impl<K: Clone, V: Clone, C: Clone, A: Allocator + Clone> Clone for BTreeMap<K, V, C, A> {
-    fn clone(&self) -> BTreeMap<K, V, C, A> {
-        fn clone_subtree<'a, K: Clone, V: Clone, C: Clone, A: Allocator + Clone>(
+impl<K: Clone, V: Clone, O: Clone, A: Allocator + Clone> Clone for BTreeMap<K, V, O, A> {
+    fn clone(&self) -> BTreeMap<K, V, O, A> {
+        fn clone_subtree<'a, K: Clone, V: Clone, O: Clone, A: Allocator + Clone>(
             node: NodeRef<marker::Immut<'a>, K, V, marker::LeafOrInternal>,
-            comparator: &C,
+            order: &O,
             alloc: A,
-        ) -> BTreeMap<K, V, C, A>
+        ) -> BTreeMap<K, V, O, A>
         where
             K: 'a,
             V: 'a,
@@ -229,7 +230,7 @@ impl<K: Clone, V: Clone, C: Clone, A: Allocator + Clone> Clone for BTreeMap<K, V
                     let mut out_tree = BTreeMap {
                         root: Some(Root::new(alloc.clone())),
                         length: 0,
-                        comparator: comparator.clone(),
+                        order: order.clone(),
                         alloc: ManuallyDrop::new(alloc),
                         _marker: PhantomData,
                     };
@@ -255,7 +256,7 @@ impl<K: Clone, V: Clone, C: Clone, A: Allocator + Clone> Clone for BTreeMap<K, V
                 }
                 Internal(internal) => {
                     let mut out_tree =
-                        clone_subtree(internal.first_edge().descend(), comparator, alloc.clone());
+                        clone_subtree(internal.first_edge().descend(), order, alloc.clone());
 
                     {
                         let out_root = out_tree.root.as_mut().unwrap();
@@ -267,8 +268,7 @@ impl<K: Clone, V: Clone, C: Clone, A: Allocator + Clone> Clone for BTreeMap<K, V
 
                             let k = (*k).clone();
                             let v = (*v).clone();
-                            let subtree =
-                                clone_subtree(in_edge.descend(), comparator, alloc.clone());
+                            let subtree = clone_subtree(in_edge.descend(), order, alloc.clone());
 
                             // We can't destructure subtree directly
                             // because BTreeMap implements Drop
@@ -294,28 +294,28 @@ impl<K: Clone, V: Clone, C: Clone, A: Allocator + Clone> Clone for BTreeMap<K, V
         }
 
         if self.is_empty() {
-            BTreeMap::new_in(self.comparator.clone(), (*self.alloc).clone())
+            BTreeMap::new_in(self.order.clone(), (*self.alloc).clone())
         } else {
             clone_subtree(
                 self.root.as_ref().unwrap().reborrow(),
-                &self.comparator,
+                &self.order,
                 (*self.alloc).clone(),
             ) // unwrap succeeds because not empty
         }
     }
 }
 
-impl<K, Q: ?Sized, C, A: Allocator + Clone> super::Recover<Q> for BTreeMap<K, SetValZST, C, A>
+impl<K, Q: ?Sized, O, A: Allocator + Clone> super::Recover<Q> for BTreeMap<K, SetValZST, O, A>
 where
-    K: LookupKey<C>,
-    Q: LookupKey<C>,
-    C: Comparator,
+    K: LookupKey<O>,
+    Q: LookupKey<O>,
+    O: TotalOrder,
 {
     type Key = K;
 
     fn get(&self, key: &Q) -> Option<&K> {
         let root_node = self.root.as_ref()?.reborrow();
-        match root_node.search_tree(key, &self.comparator) {
+        match root_node.search_tree(key, &self.order) {
             Found(handle) => Some(handle.into_kv().0),
             GoDown(_) => None,
         }
@@ -324,7 +324,7 @@ where
     fn take(&mut self, key: &Q) -> Option<K> {
         let (map, dormant_map) = DormantMutRef::new(self);
         let root_node = map.root.as_mut()?.borrow_mut();
-        match root_node.search_tree(key, &map.comparator) {
+        match root_node.search_tree(key, &map.order) {
             Found(handle) => Some(
                 OccupiedEntry {
                     handle,
@@ -343,7 +343,7 @@ where
         let (map, dormant_map) = DormantMutRef::new(self);
         let root_node =
             map.root.get_or_insert_with(|| Root::new((*map.alloc).clone())).borrow_mut();
-        match root_node.search_tree(&key, &map.comparator) {
+        match root_node.search_tree(&key, &map.order) {
             Found(mut kv) => Some(mem::replace(kv.key_mut(), key)),
             GoDown(handle) => {
                 VacantEntry {
@@ -552,8 +552,8 @@ impl<K: fmt::Debug, V: fmt::Debug> fmt::Debug for RangeMut<'_, K, V> {
     }
 }
 
-impl<K, V, C> BTreeMap<K, V, C> {
-    /// Makes a new, empty `BTreeMap` ordered by the given `comparator`.
+impl<K, V, O> BTreeMap<K, V, O> {
+    /// Makes a new, empty `BTreeMap` ordered by the given `order`.
     ///
     /// Does not allocate anything on its own.
     ///
@@ -562,15 +562,15 @@ impl<K, V, C> BTreeMap<K, V, C> {
     /// Basic usage:
     ///
     /// ```
-    /// # use core::cmp::Ordering;
-    /// # use copse::{Comparator, LookupKey, BTreeMap};
+    /// # use copse::{BTreeMap, LookupKey, TotalOrder};
+    /// # use std::cmp::Ordering;
     /// #
-    /// // define a comparator
-    /// struct NthByteComparator {
+    /// // define a total order
+    /// struct OrderByNthByte {
     ///     n: usize, // runtime state
     /// }
     ///
-    /// impl Comparator for NthByteComparator {
+    /// impl TotalOrder for OrderByNthByte {
     ///     // etc
     /// #     type Key = [u8];
     /// #     fn cmp(&self, this: &[u8], that: &[u8]) -> Ordering {
@@ -583,37 +583,37 @@ impl<K, V, C> BTreeMap<K, V, C> {
     /// #     }
     /// }
     ///
-    /// // define lookup key types for collections sorted by our comparator
-    /// # impl LookupKey<NthByteComparator> for [u8] {
+    /// // define lookup key types for collections sorted by our total order
+    /// # impl LookupKey<OrderByNthByte> for [u8] {
     /// #     fn key(&self) -> &[u8] { self }
     /// # }
-    /// # impl LookupKey<NthByteComparator> for str {
+    /// # impl LookupKey<OrderByNthByte> for str {
     /// #     fn key(&self) -> &[u8] { self.as_bytes() }
     /// # }
-    /// impl LookupKey<NthByteComparator> for String {
+    /// impl LookupKey<OrderByNthByte> for String {
     ///     // etc
-    /// #     fn key(&self) -> &[u8] { LookupKey::<NthByteComparator>::key(self.as_str()) }
+    /// #     fn key(&self) -> &[u8] { LookupKey::<OrderByNthByte>::key(self.as_str()) }
     /// }
     ///
-    /// // create a map using our comparator
-    /// let mut map = BTreeMap::new(NthByteComparator { n: 9 });
+    /// // create a map using our total order
+    /// let mut map = BTreeMap::new(OrderByNthByte { n: 9 });
     ///
     /// // entries can now be inserted into the empty map
     /// assert!(map.insert("abcdefghij".to_string(), ()).is_none());
     /// ```
     #[must_use]
-    pub const fn new(comparator: C) -> BTreeMap<K, V, C> {
+    pub const fn new(order: O) -> BTreeMap<K, V, O> {
         BTreeMap {
             root: None,
             length: 0,
-            comparator,
+            order,
             alloc: ManuallyDrop::new(Global),
             _marker: PhantomData,
         }
     }
 }
 
-impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
+impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     /// Clears the map, removing all elements.
     ///
     /// # Examples
@@ -630,13 +630,13 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// ```
     pub fn clear(&mut self)
     where
-        C: Clone,
+        O: Clone,
     {
         // avoid moving the allocator
         mem::drop(BTreeMap {
             root: mem::replace(&mut self.root, None),
             length: mem::replace(&mut self.length, 0),
-            comparator: self.comparator.clone(),
+            order: self.order.clone(),
             alloc: self.alloc.clone(),
             _marker: PhantomData,
         });
@@ -644,7 +644,7 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
 
     decorate_if! {
         if #[cfg(feature = "btreemap_alloc")] {
-            /// Makes a new empty BTreeMap with a reasonable choice for B, ordered by the given `comparator`.
+            /// Makes a new empty BTreeMap with a reasonable choice for B, ordered by the given `order`.
             ///
             /// # Examples
             ///
@@ -652,21 +652,21 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
             ///
             /// ```
             /// # #![feature(allocator_api)]
-            /// use copse::{BTreeMap, OrdComparator};
+            /// use copse::{BTreeMap, OrdTotalOrder};
             /// use std::alloc::Global;
             ///
-            /// let mut map = BTreeMap::new_in(OrdComparator::default(), Global);
+            /// let mut map = BTreeMap::new_in(OrdTotalOrder::default(), Global);
             ///
             /// // entries can now be inserted into the empty map
             /// map.insert(1, "a");
             /// ```
             pub
         }
-        fn new_in(comparator: C, alloc: A) -> BTreeMap<K, V, C, A> {
+        fn new_in(order: O, alloc: A) -> BTreeMap<K, V, O, A> {
             BTreeMap {
                 root: None,
                 length: 0,
-                comparator,
+                order,
                 alloc: ManuallyDrop::new(alloc),
                 _marker: PhantomData,
             }
@@ -674,7 +674,7 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     }
 }
 
-impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
+impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     /// Returns a reference to the value corresponding to the key.
     ///
     /// The key may be any borrowed form of the map's key type, but the ordering
@@ -694,12 +694,12 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// ```
     pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<&V>
     where
-        K: LookupKey<C>,
-        Q: LookupKey<C>,
-        C: Comparator,
+        K: LookupKey<O>,
+        Q: LookupKey<O>,
+        O: TotalOrder,
     {
         let root_node = self.root.as_ref()?.reborrow();
-        match root_node.search_tree(key, &self.comparator) {
+        match root_node.search_tree(key, &self.order) {
             Found(handle) => Some(handle.into_kv().1),
             GoDown(_) => None,
         }
@@ -722,12 +722,12 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// ```
     pub fn get_key_value<Q: ?Sized>(&self, k: &Q) -> Option<(&K, &V)>
     where
-        K: LookupKey<C>,
-        Q: LookupKey<C>,
-        C: Comparator,
+        K: LookupKey<O>,
+        Q: LookupKey<O>,
+        O: TotalOrder,
     {
         let root_node = self.root.as_ref()?.reborrow();
-        match root_node.search_tree(k, &self.comparator) {
+        match root_node.search_tree(k, &self.order) {
             Found(handle) => Some(handle.into_kv()),
             GoDown(_) => None,
         }
@@ -751,8 +751,8 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// ```
     pub fn first_key_value(&self) -> Option<(&K, &V)>
     where
-        K: LookupKey<C>,
-        C: Comparator,
+        K: LookupKey<O>,
+        O: TotalOrder,
     {
         let root_node = self.root.as_ref()?.reborrow();
         root_node.first_leaf_edge().right_kv().ok().map(Handle::into_kv)
@@ -777,10 +777,10 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// assert_eq!(*map.get(&1).unwrap(), "first");
     /// assert_eq!(*map.get(&2).unwrap(), "b");
     /// ```
-    pub fn first_entry(&mut self) -> Option<OccupiedEntry<'_, K, V, C, A>>
+    pub fn first_entry(&mut self) -> Option<OccupiedEntry<'_, K, V, O, A>>
     where
-        K: LookupKey<C>,
-        C: Comparator,
+        K: LookupKey<O>,
+        O: TotalOrder,
     {
         let (map, dormant_map) = DormantMutRef::new(self);
         let root_node = map.root.as_mut()?.borrow_mut();
@@ -813,8 +813,8 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// ```
     pub fn pop_first(&mut self) -> Option<(K, V)>
     where
-        K: LookupKey<C>,
-        C: Comparator,
+        K: LookupKey<O>,
+        O: TotalOrder,
     {
         self.first_entry().map(|entry| entry.remove_entry())
     }
@@ -836,8 +836,8 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// ```
     pub fn last_key_value(&self) -> Option<(&K, &V)>
     where
-        K: LookupKey<C>,
-        C: Comparator,
+        K: LookupKey<O>,
+        O: TotalOrder,
     {
         let root_node = self.root.as_ref()?.reborrow();
         root_node.last_leaf_edge().left_kv().ok().map(Handle::into_kv)
@@ -862,10 +862,10 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// assert_eq!(*map.get(&1).unwrap(), "a");
     /// assert_eq!(*map.get(&2).unwrap(), "last");
     /// ```
-    pub fn last_entry(&mut self) -> Option<OccupiedEntry<'_, K, V, C, A>>
+    pub fn last_entry(&mut self) -> Option<OccupiedEntry<'_, K, V, O, A>>
     where
-        K: LookupKey<C>,
-        C: Comparator,
+        K: LookupKey<O>,
+        O: TotalOrder,
     {
         let (map, dormant_map) = DormantMutRef::new(self);
         let root_node = map.root.as_mut()?.borrow_mut();
@@ -898,8 +898,8 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// ```
     pub fn pop_last(&mut self) -> Option<(K, V)>
     where
-        K: LookupKey<C>,
-        C: Comparator,
+        K: LookupKey<O>,
+        O: TotalOrder,
     {
         self.last_entry().map(|entry| entry.remove_entry())
     }
@@ -923,9 +923,9 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// ```
     pub fn contains_key<Q: ?Sized>(&self, key: &Q) -> bool
     where
-        K: LookupKey<C>,
-        Q: LookupKey<C>,
-        C: Comparator,
+        K: LookupKey<O>,
+        Q: LookupKey<O>,
+        O: TotalOrder,
     {
         self.get(key).is_some()
     }
@@ -952,12 +952,12 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     // See `get` for implementation notes, this is basically a copy-paste with mut's added
     pub fn get_mut<Q: ?Sized>(&mut self, key: &Q) -> Option<&mut V>
     where
-        K: LookupKey<C>,
-        Q: LookupKey<C>,
-        C: Comparator,
+        K: LookupKey<O>,
+        Q: LookupKey<O>,
+        O: TotalOrder,
     {
         let root_node = self.root.as_mut()?.borrow_mut();
-        match root_node.search_tree(key, &self.comparator) {
+        match root_node.search_tree(key, &self.order) {
             Found(handle) => Some(handle.into_val_mut()),
             GoDown(_) => None,
         }
@@ -991,8 +991,8 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// ```
     pub fn insert(&mut self, key: K, value: V) -> Option<V>
     where
-        K: LookupKey<C>,
-        C: Comparator,
+        K: LookupKey<O>,
+        O: TotalOrder,
     {
         match self.entry(key) {
             Occupied(mut entry) => Some(entry.insert(value)),
@@ -1025,10 +1025,10 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// assert_eq!(err.value, "b");
     /// ```
     #[cfg(feature = "map_try_insert")]
-    pub fn try_insert(&mut self, key: K, value: V) -> Result<&mut V, OccupiedError<'_, K, V, C, A>>
+    pub fn try_insert(&mut self, key: K, value: V) -> Result<&mut V, OccupiedError<'_, K, V, O, A>>
     where
-        K: LookupKey<C>,
-        C: Comparator,
+        K: LookupKey<O>,
+        O: TotalOrder,
     {
         match self.entry(key) {
             Occupied(entry) => Err(OccupiedError { entry, value }),
@@ -1056,9 +1056,9 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// ```
     pub fn remove<Q: ?Sized>(&mut self, key: &Q) -> Option<V>
     where
-        K: LookupKey<C>,
-        Q: LookupKey<C>,
-        C: Comparator,
+        K: LookupKey<O>,
+        Q: LookupKey<O>,
+        O: TotalOrder,
     {
         self.remove_entry(key).map(|(_, v)| v)
     }
@@ -1083,13 +1083,13 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// ```
     pub fn remove_entry<Q: ?Sized>(&mut self, key: &Q) -> Option<(K, V)>
     where
-        K: LookupKey<C>,
-        Q: LookupKey<C>,
-        C: Comparator,
+        K: LookupKey<O>,
+        Q: LookupKey<O>,
+        O: TotalOrder,
     {
         let (map, dormant_map) = DormantMutRef::new(self);
         let root_node = map.root.as_mut()?.borrow_mut();
-        match root_node.search_tree(key, &map.comparator) {
+        match root_node.search_tree(key, &map.order) {
             Found(handle) => Some(
                 OccupiedEntry {
                     handle,
@@ -1121,8 +1121,8 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     #[inline]
     pub fn retain<F>(&mut self, mut f: F)
     where
-        K: LookupKey<C>,
-        C: Comparator,
+        K: LookupKey<O>,
+        O: TotalOrder,
         F: FnMut(&K, &mut V) -> bool,
     {
         self.drain_filter(|k, v| !f(k, v));
@@ -1161,8 +1161,8 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// ```
     pub fn append(&mut self, other: &mut Self)
     where
-        K: LookupKey<C>,
-        C: Clone + Comparator,
+        K: LookupKey<O>,
+        O: Clone + TotalOrder,
         A: Clone,
     {
         // Do we have to append anything at all?
@@ -1177,17 +1177,16 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
         }
 
         let self_iter =
-            mem::replace(self, Self::new_in(self.comparator.clone(), (*self.alloc).clone()))
-                .into_iter();
+            mem::replace(self, Self::new_in(self.order.clone(), (*self.alloc).clone())).into_iter();
         let other_iter =
-            mem::replace(other, Self::new_in(self.comparator.clone(), (*self.alloc).clone()))
+            mem::replace(other, Self::new_in(self.order.clone(), (*self.alloc).clone()))
                 .into_iter();
         let root = self.root.get_or_insert_with(|| Root::new((*self.alloc).clone()));
         root.append_from_sorted_iters(
             self_iter,
             other_iter,
             &mut self.length,
-            |a: &(K, V), b: &(K, V)| self.comparator.cmp(a.0.key(), b.0.key()),
+            |a: &(K, V), b: &(K, V)| self.order.cmp(a.0.key(), b.0.key()),
             (*self.alloc).clone(),
         )
     }
@@ -1223,13 +1222,13 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// ```
     pub fn range<T: ?Sized, R>(&self, range: R) -> Range<'_, K, V>
     where
-        T: LookupKey<C>,
-        K: LookupKey<C>,
-        C: Comparator,
+        T: LookupKey<O>,
+        K: LookupKey<O>,
+        O: TotalOrder,
         R: RangeBounds<T>,
     {
         if let Some(root) = &self.root {
-            Range { inner: root.reborrow().range_search(&self.comparator, range) }
+            Range { inner: root.reborrow().range_search(&self.order, range) }
         } else {
             Range { inner: LeafRange::none() }
         }
@@ -1265,14 +1264,14 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// ```
     pub fn range_mut<T: ?Sized, R>(&mut self, range: R) -> RangeMut<'_, K, V>
     where
-        T: LookupKey<C>,
-        K: LookupKey<C>,
-        C: Comparator,
+        T: LookupKey<O>,
+        K: LookupKey<O>,
+        O: TotalOrder,
         R: RangeBounds<T>,
     {
         if let Some(root) = &mut self.root {
             RangeMut {
-                inner: root.borrow_valmut().range_search(&self.comparator, range),
+                inner: root.borrow_valmut().range_search(&self.order, range),
                 _marker: PhantomData,
             }
         } else {
@@ -1300,10 +1299,10 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// assert_eq!(count["b"], 2);
     /// assert_eq!(count["c"], 1);
     /// ```
-    pub fn entry(&mut self, key: K) -> Entry<'_, K, V, C, A>
+    pub fn entry(&mut self, key: K) -> Entry<'_, K, V, O, A>
     where
-        K: LookupKey<C>,
-        C: Comparator,
+        K: LookupKey<O>,
+        O: TotalOrder,
     {
         let (map, dormant_map) = DormantMutRef::new(self);
         match map.root {
@@ -1314,7 +1313,7 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
                 alloc: (*map.alloc).clone(),
                 _marker: PhantomData,
             }),
-            Some(ref mut root) => match root.borrow_mut().search_tree(&key, &map.comparator) {
+            Some(ref mut root) => match root.borrow_mut().search_tree(&key, &map.order) {
                 Found(handle) => Occupied(OccupiedEntry {
                     handle,
                     dormant_map,
@@ -1363,19 +1362,19 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// ```
     pub fn split_off<Q: ?Sized>(&mut self, key: &Q) -> Self
     where
-        K: LookupKey<C>,
-        Q: LookupKey<C>,
-        C: Clone + Comparator,
+        K: LookupKey<O>,
+        Q: LookupKey<O>,
+        O: Clone + TotalOrder,
         A: Clone,
     {
         if self.is_empty() {
-            return Self::new_in(self.comparator.clone(), (*self.alloc).clone());
+            return Self::new_in(self.order.clone(), (*self.alloc).clone());
         }
 
         let total_num = self.len();
         let left_root = self.root.as_mut().unwrap(); // unwrap succeeds because not empty
 
-        let right_root = left_root.split_off(key, &self.comparator, (*self.alloc).clone());
+        let right_root = left_root.split_off(key, &self.order, (*self.alloc).clone());
 
         let (new_left_len, right_len) = Root::calc_split_length(total_num, &left_root, &right_root);
         self.length = new_left_len;
@@ -1383,7 +1382,7 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
         BTreeMap {
             root: Some(right_root),
             length: right_len,
-            comparator: self.comparator.clone(),
+            order: self.order.clone(),
             alloc: self.alloc.clone(),
             _marker: PhantomData,
         }
@@ -1426,8 +1425,8 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
         }
         fn drain_filter<F>(&mut self, pred: F) -> DrainFilter<'_, K, V, F, A>
         where
-            K: LookupKey<C>,
-            C: Comparator,
+            K: LookupKey<O>,
+            O: TotalOrder,
             F: FnMut(&K, &mut V) -> bool,
         {
             let (inner, alloc) = self.drain_filter_inner();
@@ -1437,8 +1436,8 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
 
     pub(super) fn drain_filter_inner(&mut self) -> (DrainFilterInner<'_, K, V>, A)
     where
-        K: LookupKey<C>,
-        C: Comparator,
+        K: LookupKey<O>,
+        O: TotalOrder,
     {
         if let Some(root) = self.root.as_mut() {
             let (root, dormant_root) = DormantMutRef::new(root);
@@ -1508,32 +1507,28 @@ impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
     /// Makes a `BTreeMap` from a sorted iterator.
     pub(crate) fn bulk_build_from_sorted_iter<I>(
         iter: I,
-        comparator: C,
+        order: O,
         alloc: A,
-    ) -> BTreeMap<K, V, C, A>
+    ) -> BTreeMap<K, V, O, A>
     where
-        K: LookupKey<C>,
-        C: Comparator,
+        K: LookupKey<O>,
+        O: TotalOrder,
         I: IntoIterator<Item = (K, V)>,
     {
         let mut root = Root::new(alloc.clone());
         let mut length = 0;
-        root.bulk_push(
-            DedupSortedIter::new(iter.into_iter(), &comparator),
-            &mut length,
-            alloc.clone(),
-        );
+        root.bulk_push(DedupSortedIter::new(iter.into_iter(), &order), &mut length, alloc.clone());
         BTreeMap {
             root: Some(root),
             length,
-            comparator,
+            order,
             alloc: ManuallyDrop::new(alloc),
             _marker: PhantomData,
         }
     }
 }
 
-impl<'a, K, V, C, A: Allocator + Clone> IntoIterator for &'a BTreeMap<K, V, C, A> {
+impl<'a, K, V, O, A: Allocator + Clone> IntoIterator for &'a BTreeMap<K, V, O, A> {
     type Item = (&'a K, &'a V);
     type IntoIter = Iter<'a, K, V>;
 
@@ -1596,7 +1591,7 @@ impl<K, V> Clone for Iter<'_, K, V> {
     }
 }
 
-impl<'a, K, V, C, A: Allocator + Clone> IntoIterator for &'a mut BTreeMap<K, V, C, A> {
+impl<'a, K, V, O, A: Allocator + Clone> IntoIterator for &'a mut BTreeMap<K, V, O, A> {
     type Item = (&'a K, &'a mut V);
     type IntoIter = IterMut<'a, K, V>;
 
@@ -1661,7 +1656,7 @@ impl<'a, K, V> IterMut<'a, K, V> {
     }
 }
 
-impl<K, V, C, A: Allocator + Clone> IntoIterator for BTreeMap<K, V, C, A> {
+impl<K, V, O, A: Allocator + Clone> IntoIterator for BTreeMap<K, V, O, A> {
     type Item = (K, V);
     type IntoIter = IntoIter<K, V, A>;
 
@@ -2115,23 +2110,23 @@ impl<'a, K, V> DoubleEndedIterator for RangeMut<'a, K, V> {
 
 impl<K, V> FusedIterator for RangeMut<'_, K, V> {}
 
-impl<K: LookupKey<C>, V, C: Comparator + Default> FromIterator<(K, V)> for BTreeMap<K, V, C> {
-    fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> BTreeMap<K, V, C> {
+impl<K: LookupKey<O>, V, O: TotalOrder + Default> FromIterator<(K, V)> for BTreeMap<K, V, O> {
+    fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> BTreeMap<K, V, O> {
         let mut inputs: Vec<_> = iter.into_iter().collect();
 
         if inputs.is_empty() {
-            return BTreeMap::new(C::default());
+            return BTreeMap::new(O::default());
         }
 
         // use stable sort to preserve the insertion order.
-        let comparator = C::default();
-        inputs.sort_by(|a, b| comparator.cmp(a.0.key(), b.0.key()));
-        BTreeMap::bulk_build_from_sorted_iter(inputs, comparator, Global)
+        let order = O::default();
+        inputs.sort_by(|a, b| order.cmp(a.0.key(), b.0.key()));
+        BTreeMap::bulk_build_from_sorted_iter(inputs, order, Global)
     }
 }
 
-impl<K: LookupKey<C>, V, C: Comparator, A: Allocator + Clone> Extend<(K, V)>
-    for BTreeMap<K, V, C, A>
+impl<K: LookupKey<O>, V, O: TotalOrder, A: Allocator + Clone> Extend<(K, V)>
+    for BTreeMap<K, V, O, A>
 {
     #[inline]
     fn extend<T: IntoIterator<Item = (K, V)>>(&mut self, iter: T) {
@@ -2147,8 +2142,8 @@ impl<K: LookupKey<C>, V, C: Comparator, A: Allocator + Clone> Extend<(K, V)>
     }
 }
 
-impl<'a, K: LookupKey<C> + Copy, V: Copy, C: Comparator, A: Allocator + Clone>
-    Extend<(&'a K, &'a V)> for BTreeMap<K, V, C, A>
+impl<'a, K: LookupKey<O> + Copy, V: Copy, O: TotalOrder, A: Allocator + Clone>
+    Extend<(&'a K, &'a V)> for BTreeMap<K, V, O, A>
 {
     fn extend<I: IntoIterator<Item = (&'a K, &'a V)>>(&mut self, iter: I) {
         self.extend(iter.into_iter().map(|(&key, &value)| (key, value)));
@@ -2161,7 +2156,7 @@ impl<'a, K: LookupKey<C> + Copy, V: Copy, C: Comparator, A: Allocator + Clone>
     }
 }
 
-impl<K: Hash, V: Hash, C, A: Allocator + Clone> Hash for BTreeMap<K, V, C, A> {
+impl<K: Hash, V: Hash, O, A: Allocator + Clone> Hash for BTreeMap<K, V, O, A> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_length_prefix(self.len());
         for elt in self {
@@ -2170,46 +2165,46 @@ impl<K: Hash, V: Hash, C, A: Allocator + Clone> Hash for BTreeMap<K, V, C, A> {
     }
 }
 
-impl<K, V, C: Comparator + Default> Default for BTreeMap<K, V, C> {
-    /// Creates an empty `BTreeMap`, ordered by a default `C` comparator.
-    fn default() -> BTreeMap<K, V, C> {
-        BTreeMap::new(C::default())
+impl<K, V, O: TotalOrder + Default> Default for BTreeMap<K, V, O> {
+    /// Creates an empty `BTreeMap`, ordered by a default `O` order.
+    fn default() -> BTreeMap<K, V, O> {
+        BTreeMap::new(O::default())
     }
 }
 
-impl<K: PartialEq, V: PartialEq, C, A: Allocator + Clone> PartialEq for BTreeMap<K, V, C, A> {
-    fn eq(&self, other: &BTreeMap<K, V, C, A>) -> bool {
+impl<K: PartialEq, V: PartialEq, O, A: Allocator + Clone> PartialEq for BTreeMap<K, V, O, A> {
+    fn eq(&self, other: &BTreeMap<K, V, O, A>) -> bool {
         self.len() == other.len() && self.iter().zip(other).all(|(a, b)| a == b)
     }
 }
 
-impl<K: Eq, V: Eq, C, A: Allocator + Clone> Eq for BTreeMap<K, V, C, A> {}
+impl<K: Eq, V: Eq, O, A: Allocator + Clone> Eq for BTreeMap<K, V, O, A> {}
 
-impl<K: PartialOrd, V: PartialOrd, C, A: Allocator + Clone> PartialOrd for BTreeMap<K, V, C, A> {
+impl<K: PartialOrd, V: PartialOrd, O, A: Allocator + Clone> PartialOrd for BTreeMap<K, V, O, A> {
     #[inline]
-    fn partial_cmp(&self, other: &BTreeMap<K, V, C, A>) -> Option<Ordering> {
+    fn partial_cmp(&self, other: &BTreeMap<K, V, O, A>) -> Option<Ordering> {
         self.iter().partial_cmp(other.iter())
     }
 }
 
-impl<K: Ord, V: Ord, C, A: Allocator + Clone> Ord for BTreeMap<K, V, C, A> {
+impl<K: Ord, V: Ord, O, A: Allocator + Clone> Ord for BTreeMap<K, V, O, A> {
     #[inline]
-    fn cmp(&self, other: &BTreeMap<K, V, C, A>) -> Ordering {
+    fn cmp(&self, other: &BTreeMap<K, V, O, A>) -> Ordering {
         self.iter().cmp(other.iter())
     }
 }
 
-impl<K: Debug, V: Debug, C, A: Allocator + Clone> Debug for BTreeMap<K, V, C, A> {
+impl<K: Debug, V: Debug, O, A: Allocator + Clone> Debug for BTreeMap<K, V, O, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_map().entries(self.iter()).finish()
     }
 }
 
-impl<K, Q: ?Sized, V, C, A: Allocator + Clone> Index<&Q> for BTreeMap<K, V, C, A>
+impl<K, Q: ?Sized, V, O, A: Allocator + Clone> Index<&Q> for BTreeMap<K, V, O, A>
 where
-    K: LookupKey<C>,
-    Q: LookupKey<C>,
-    C: Comparator,
+    K: LookupKey<O>,
+    Q: LookupKey<O>,
+    O: TotalOrder,
 {
     type Output = V;
 
@@ -2224,8 +2219,8 @@ where
     }
 }
 
-impl<K: LookupKey<C>, V, C: Comparator + Default, const N: usize> From<[(K, V); N]>
-    for BTreeMap<K, V, C>
+impl<K: LookupKey<O>, V, O: TotalOrder + Default, const N: usize> From<[(K, V); N]>
+    for BTreeMap<K, V, O>
 {
     /// Converts a `[(K, V); N]` into a `BTreeMap<(K, V)>`.
     ///
@@ -2238,17 +2233,17 @@ impl<K: LookupKey<C>, V, C: Comparator + Default, const N: usize> From<[(K, V); 
     /// ```
     fn from(mut arr: [(K, V); N]) -> Self {
         if N == 0 {
-            return BTreeMap::new(C::default());
+            return BTreeMap::new(O::default());
         }
 
         // use stable sort to preserve the insertion order.
-        let comparator = C::default();
-        arr.sort_by(|a, b| comparator.cmp(a.0.key(), b.0.key()));
-        BTreeMap::bulk_build_from_sorted_iter(arr, comparator, Global)
+        let order = O::default();
+        arr.sort_by(|a, b| order.cmp(a.0.key(), b.0.key()));
+        BTreeMap::bulk_build_from_sorted_iter(arr, order, Global)
     }
 }
 
-impl<K, V, C, A: Allocator + Clone> BTreeMap<K, V, C, A> {
+impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     /// Gets an iterator over the entries of the map, sorted by key.
     ///
     /// # Examples

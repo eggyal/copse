@@ -1,9 +1,9 @@
 //! Direct ports of the standard library's [`BTreeMap`][std::collections::BTreeMap],
 //! [`BTreeSet`][std::collections::BTreeSet] and [`BinaryHeap`][std::collections::BinaryHeap]
-//! collections, but which sort according to a specified [`Comparator`] rather than relying upon
+//! collections, but which sort according to a specified [`TotalOrder`] rather than relying upon
 //! the [`Ord`] trait.
 //!
-//! This is primarily useful when the [`Comparator`] depends upon runtime state, and therefore
+//! This is primarily useful when the [`TotalOrder`] depends upon runtime state, and therefore
 //! cannot be provided as an [`Ord`] implementation for any type.
 //!
 //! # Lookup keys
@@ -14,21 +14,21 @@
 //! order.
 //!
 //! However, copse's collections do not use the [`Ord`] trait; instead, lookups can only ever
-//! be performed using the [`Comparator`] supplied upon collection creation.  This comparator
-//! can only compare values of its [`Key`][Comparator::Key] associated type, and hence keys used
-//! for lookups must implement [`LookupKey<C>`] in order that the conversion can be performed.
+//! be performed using the [`TotalOrder`] supplied upon collection creation.  This total order
+//! can only compare values of its [`Key`][TotalOrder::Key] associated type, and hence keys used
+//! for lookups must implement [`LookupKey<O>`] in order that the conversion can be performed.
 //!
 //! # Example
 //! ```rust
 //! # use core::cmp::Ordering;
-//! # use copse::{Comparator, LookupKey, BTreeSet};
+//! # use copse::{TotalOrder, LookupKey, BTreeSet};
 //! #
-//! // define a comparator
-//! struct NthByteComparator {
+//! // define a total order
+//! struct OrderByNthByte {
 //!     n: usize, // runtime state
 //! }
 //!
-//! impl Comparator for NthByteComparator {
+//! impl TotalOrder for OrderByNthByte {
 //!     type Key = [u8];
 //!     fn cmp(&self, this: &[u8], that: &[u8]) -> Ordering {
 //!         match (this.get(self.n), that.get(self.n)) {
@@ -40,19 +40,19 @@
 //!     }
 //! }
 //!
-//! // define lookup key types for collections sorted by our comparator
-//! impl LookupKey<NthByteComparator> for [u8] {
+//! // define lookup key types for collections sorted by our total order
+//! impl LookupKey<OrderByNthByte> for [u8] {
 //!     fn key(&self) -> &[u8] { self }
 //! }
-//! impl LookupKey<NthByteComparator> for str {
+//! impl LookupKey<OrderByNthByte> for str {
 //!     fn key(&self) -> &[u8] { self.as_bytes() }
 //! }
-//! impl LookupKey<NthByteComparator> for String {
-//!     fn key(&self) -> &[u8] { LookupKey::<NthByteComparator>::key(self.as_str()) }
+//! impl LookupKey<OrderByNthByte> for String {
+//!     fn key(&self) -> &[u8] { LookupKey::<OrderByNthByte>::key(self.as_str()) }
 //! }
 //!
-//! // create a collection using our comparator
-//! let mut set = BTreeSet::new(NthByteComparator { n: 9 });
+//! // create a collection using our total order
+//! let mut set = BTreeSet::new(OrderByNthByte { n: 9 });
 //! assert!(set.insert("abcdefghijklm".to_string()));
 //! assert!(!set.insert("xxxxxxxxxjxx".to_string()));
 //! assert!(set.contains("jjjjjjjjjj"));
@@ -60,12 +60,12 @@
 //!
 //! # Collection type parameters
 //! In addition to the type parameters familiar from the standard library collections, copse's
-//! collections are additionally parameterised by the type of the [`Comparator`].  If the
-//! comparator type is not explicitly named, it defaults to the [`OrdComparator`] for the
-//! storage key's [`DefaultComparisonKey`][OrdStoredKey::DefaultComparisonKey], which yields
-//! behaviour analagous to the standard library collections (i.e. sorted by the `Ord` trait).
-//! If you find yourself using these items, then you should probably ditch copse for the
-//! standard library instead.
+//! collections are additionally parameterised by the type of the [`TotalOrder`].  If the
+//! total order is not explicitly named, it defaults to the [`OrdTotalOrder`] for the storage
+//! key's [`DefaultComparisonKey`][OrdStoredKey::DefaultComparisonKey], which yields behaviour
+//! analagous to the standard library collections (i.e. sorted by the `Ord` trait).  If you
+//! find yourself using these items, then you should probably ditch copse for the standard
+//! library instead.
 //!
 //! # Crate feature flags
 //! This crate defines a number of feature flags, none of which are enabled by default:
@@ -144,67 +144,63 @@ pub use btree_map::BTreeMap;
 #[doc(no_inline)]
 pub use btree_set::BTreeSet;
 
-/// A comparator defines a total order over its associated type `Key`.
-pub trait Comparator {
-    /// The type over which this comparator defines a total order.
+/// An immutable strict [total order] over the associated type `Key`.
+/// 
+/// [total order]: https://en.wikipedia.org/wiki/Total_order
+pub trait TotalOrder {
+    /// The type over which this total order is defined.
     type Key: ?Sized;
 
     /// Compare two values and return the position of `this` relative
-    /// to `that` according to the total order defined by this comparator.
+    /// to `that` according to this total order.
     ///
     /// The comparison must satisfy both transitivity and duality.
     fn cmp(&self, this: &Self::Key, that: &Self::Key) -> Ordering;
 
-    /// Tests whether `this == that` under the total order defined by this
-    /// comparator.  It is a logic error for this method to be inconsistent
-    /// with [`Comparator::cmp`], and therefore the default implementation
-    /// should rarely be overriden.
+    /// Tests whether `this == that` under this total order.  It is a logic
+    /// error for this method to be inconsistent with [`TotalOrder::cmp`],
+    /// and therefore the default implementation should rarely be overriden.
     #[doc(hidden)]
     #[inline]
     fn eq(&self, this: &Self::Key, that: &Self::Key) -> bool {
         self.cmp(this, that).is_eq()
     }
-    /// Tests whether `this != that` under the total order defined by this
-    /// comparator.  It is a logic error for this method to be inconsistent
-    /// with [`Comparator::cmp`], and therefore the default implementation
-    /// should rarely be overriden.
+    /// Tests whether `this != that` under this total order.  It is a logic
+    /// error for this method to be inconsistent with [`TotalOrder::cmp`],
+    /// and therefore the default implementation should rarely be overriden.
     #[doc(hidden)]
     #[inline]
     fn ne(&self, this: &Self::Key, that: &Self::Key) -> bool {
         self.cmp(this, that).is_ne()
     }
 
-    /// Tests whether `this >= that` under the total order defined by this
-    /// comparator.  It is a logic error for this method to be inconsistent
-    /// with [`Comparator::cmp`], and therefore the default implementation
-    /// should rarely be overriden.
+    /// Tests whether `this >= that` under this total order.  It is a logic
+    /// error for this method to be inconsistent with [`TotalOrder::cmp`],
+    /// and therefore the default implementation should rarely be overriden.
     #[doc(hidden)]
     #[inline]
     fn ge(&self, this: &Self::Key, that: &Self::Key) -> bool {
         self.cmp(this, that).is_ge()
     }
-    /// Tests whether `this > that` under the total order defined by this
-    /// comparator.  It is a logic error for this method to be inconsistent
-    /// with [`Comparator::cmp`], and therefore the default implementation
-    /// should rarely be overriden.
+    /// Tests whether `this > that` under this total order.  It is a logic
+    /// error for this method to be inconsistent with [`TotalOrder::cmp`],
+    /// and therefore the default implementation should rarely be overriden.
     #[doc(hidden)]
     #[inline]
     fn gt(&self, this: &Self::Key, that: &Self::Key) -> bool {
         self.cmp(this, that).is_gt()
     }
-    /// Tests whether `this <= that` under the total order defined by this
-    /// comparator.  It is a logic error for this method to be inconsistent
-    /// with [`Comparator::cmp`], and therefore the default implementation
-    /// should rarely be overriden.
+    /// Tests whether `this <= that` under this total order.  It is a logic
+    /// error for this method to be inconsistent with [`TotalOrder::cmp`],
+    /// and therefore the default implementation should rarely be overriden.
     #[doc(hidden)]
     #[inline]
     fn le(&self, this: &Self::Key, that: &Self::Key) -> bool {
         self.cmp(this, that).is_le()
     }
-    /// Tests whether `this < that` under the total order defined by this
-    /// comparator.  It is a logic error for this method to be inconsistent
-    /// with [`Comparator::cmp`], and therefore the default implementation
-    /// should rarely be overriden.
+    /// Tests whether `this < that` under this total order.  It is a logic
+    /// error for this method to be inconsistent with [`TotalOrder::cmp`],
+    /// and therefore the default implementation should rarely be overriden.
     #[doc(hidden)]
     #[inline]
     fn lt(&self, this: &Self::Key, that: &Self::Key) -> bool {
@@ -212,25 +208,25 @@ pub trait Comparator {
     }
 }
 
-/// A zero-sized comparator that delegates to the [`Ord`] implementation
+/// A zero-sized total order that delegates to the [`Ord`] implementation
 /// of its type parameter `T`.
-pub struct OrdComparator<T: ?Sized + Ord>(PhantomData<fn(&T)>);
+pub struct OrdTotalOrder<T: ?Sized + Ord>(PhantomData<fn(&T)>);
 
-impl<T: ?Sized + Ord> Default for OrdComparator<T> {
+impl<T: ?Sized + Ord> Default for OrdTotalOrder<T> {
     fn default() -> Self {
         Self(PhantomData)
     }
 }
 
-impl<T: ?Sized + Ord> Clone for OrdComparator<T> {
+impl<T: ?Sized + Ord> Clone for OrdTotalOrder<T> {
     fn clone(&self) -> Self {
         Self(PhantomData)
     }
 }
 
-impl<T: ?Sized + Ord> Copy for OrdComparator<T> {}
+impl<T: ?Sized + Ord> Copy for OrdTotalOrder<T> {}
 
-impl<T: ?Sized + Ord> Comparator for OrdComparator<T> {
+impl<T: ?Sized + Ord> TotalOrder for OrdTotalOrder<T> {
     type Key = T;
 
     fn cmp(&self, this: &T, that: &T) -> Ordering {
@@ -258,37 +254,37 @@ impl<T: ?Sized + Ord> Comparator for OrdComparator<T> {
     }
 }
 
-/// A type that can be used as a lookup key in collections that are sorted by comparators of
-/// type `C`.
+/// A type that can be used as a lookup key in collections that are sorted by total orders
+/// of type parameter `O`.
 ///
-/// For example, if `MyComparator` is a [`Comparator<str>`], then you may wish to implement
-/// `LookupKey<MyComparator>` for both `String` and `str` in order that keys of those types
-/// can be used to search collections ordered by a comparator of type `MyComparator`.  Note
-/// that you must provide such implementation even for the reflexive/no-op case, which will
-/// almost always be desirable.
-pub trait LookupKey<C: Comparator> {
-    /// Returns a reference to the comparison key type.
+/// For example, if `MyOrdering` is a [`TotalOrder<OrderedType = str>`], then you may wish
+/// to implement [`LookupKey<MyOrdering>`] for both [`String`] and [`str`] in order that
+/// keys of those types can be used to search collections ordered by any total order of
+/// type `MyOrdering`.  **Note that you must provide such implementation even for the
+/// reflexive/no-op case, which will almost always be desirable.**
+pub trait LookupKey<O: TotalOrder> {
+    /// Return the key by which `self` is ordered under total orders of type `O`.
     fn key(&self) -> &C::Key;
 }
 
-impl<T: ?Sized + Ord, K: ?Sized + Borrow<T>> LookupKey<OrdComparator<T>> for K {
+impl<T: ?Sized + Ord, K: ?Sized + Borrow<T>> LookupKey<OrdTotalOrder<T>> for K {
     fn key(&self) -> &T {
         self.borrow()
     }
 }
 
 /// A helper trait implemented on potential storage key types, used to identify their default
-/// comparison type for `Ord`-based comparisons.
+/// comparison type for [`Ord`]-based comparisons.
 ///
-/// This is only really used when collections are left to select the default [`OrdComparator`]
-/// comparator, which essentially converts copse's collections into those already provided by
+/// This is only really used when collections are left to select the default [`OrdTotalOrder`]
+/// total order, which essentially converts copse's collections into those already provided by
 /// the standard library.  This trait is therefore a convenience, but of relatively little value.
 ///
-/// For example, a collection that stores `String` under the default comparator will use `str`
-/// as the comparison type owing to the implementation of this trait for `String`.
-pub trait OrdStoredKey: LookupKey<OrdComparator<Self::DefaultComparisonKey>> {
+/// For example, a collection that stores [`String`] under the default total order will use
+/// [`str`] as the comparison type owing to the implementation of this trait for [`String`].
+pub trait OrdStoredKey: LookupKey<OrdTotalOrder<Self::DefaultComparisonKey>> {
     /// The comparison type to be used by collections storing keys of `Self` type and using the
-    /// default [`OrdComparator`] comparator.
+    /// default [`OrdTotalOrder`] total order.
     type DefaultComparisonKey: ?Sized + Ord;
 }
 

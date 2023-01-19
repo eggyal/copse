@@ -286,7 +286,7 @@ fn test_is_disjoint() {
 // Also implicitly tests the trivial function definition of is_superset
 fn test_is_subset() {
     fn is_subset(a: &[i32], b: &[i32]) -> bool {
-        let set_a = BTreeSet::<_, OrdComparator<i32>>::from_iter(a.iter());
+        let set_a = BTreeSet::<_, OrdTotalOrder<i32>>::from_iter(a.iter());
         let set_b = BTreeSet::from_iter(b.iter());
         set_a.is_subset(&set_b)
     }
@@ -323,7 +323,7 @@ fn test_is_subset() {
 #[test]
 fn test_is_superset() {
     fn is_superset(a: &[i32], b: &[i32]) -> bool {
-        let set_a = BTreeSet::<_, OrdComparator<i32>>::from_iter(a.iter());
+        let set_a = BTreeSet::<_, OrdTotalOrder<i32>>::from_iter(a.iter());
         let set_b = BTreeSet::from_iter(b.iter());
         set_a.is_superset(&set_b)
     }
@@ -456,7 +456,7 @@ fn test_zip() {
     x.insert(12);
     x.insert(11);
 
-    let mut y = BTreeSet::<_, OrdComparator<str>>::default();
+    let mut y = BTreeSet::<_, OrdTotalOrder<str>>::default();
     y.insert("foo");
     y.insert("bar");
 
@@ -473,7 +473,7 @@ fn test_zip() {
 fn test_from_iter() {
     let xs = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
-    let set = BTreeSet::<_, OrdComparator<i32>>::from_iter(xs.iter());
+    let set = BTreeSet::<_, OrdTotalOrder<i32>>::from_iter(xs.iter());
 
     for x in &xs {
         assert!(set.contains(x));
@@ -697,7 +697,7 @@ fn assert_derives() {
 
 #[test]
 fn test_ord_absence() {
-    fn set<K, C: Copy>(mut set: BTreeSet<K, C>) {
+    fn set<K, O: Copy>(mut set: BTreeSet<K, O>) {
         let _ = set.is_empty();
         let _ = set.len();
         set.clear();
@@ -705,13 +705,13 @@ fn test_ord_absence() {
         let _ = set.into_iter();
     }
 
-    fn set_debug<K: Debug, C>(set: BTreeSet<K, C>) {
+    fn set_debug<K: Debug, O>(set: BTreeSet<K, O>) {
         format!("{set:?}");
         format!("{:?}", set.iter());
         format!("{:?}", set.into_iter());
     }
 
-    fn set_clone<K: Clone, C: Clone>(mut set: BTreeSet<K, C>) {
+    fn set_clone<K: Clone, O: Clone>(mut set: BTreeSet<K, O>) {
         set.clone_from(&set.clone());
     }
 

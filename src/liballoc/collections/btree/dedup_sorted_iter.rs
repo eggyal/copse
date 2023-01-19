@@ -1,6 +1,6 @@
 use core::iter::Peekable;
 
-use crate::{Comparator, LookupKey};
+use crate::{LookupKey, TotalOrder};
 
 /// A iterator for deduping the key of a sorted iterator.
 /// When encountering the duplicated key, only the last key-value pair is yielded.
@@ -8,27 +8,27 @@ use crate::{Comparator, LookupKey};
 /// Used by [`BTreeMap::bulk_build_from_sorted_iter`][1].
 ///
 /// [1]: crate::collections::BTreeMap::bulk_build_from_sorted_iter
-pub struct DedupSortedIter<'a, K, V, C, I>
+pub struct DedupSortedIter<'a, K, V, O, I>
 where
     I: Iterator<Item = (K, V)>,
 {
     iter: Peekable<I>,
-    comparator: &'a C,
+    order: &'a O,
 }
 
-impl<'a, K, V, C, I> DedupSortedIter<'a, K, V, C, I>
+impl<'a, K, V, O, I> DedupSortedIter<'a, K, V, O, I>
 where
     I: Iterator<Item = (K, V)>,
 {
-    pub fn new(iter: I, comparator: &'a C) -> Self {
-        Self { iter: iter.peekable(), comparator }
+    pub fn new(iter: I, order: &'a O) -> Self {
+        Self { iter: iter.peekable(), order }
     }
 }
 
-impl<K, V, C, I> Iterator for DedupSortedIter<'_, K, V, C, I>
+impl<K, V, O, I> Iterator for DedupSortedIter<'_, K, V, O, I>
 where
-    K: LookupKey<C>,
-    C: Comparator,
+    K: LookupKey<O>,
+    O: TotalOrder,
     I: Iterator<Item = (K, V)>,
 {
     type Item = (K, V);
@@ -45,7 +45,7 @@ where
                 None => return Some(next),
             };
 
-            if self.comparator.ne(next.0.key(), peeked.0.key()) {
+            if self.order.ne(next.0.key(), peeked.0.key()) {
                 return Some(next);
             }
         }
