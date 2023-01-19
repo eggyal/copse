@@ -2,7 +2,7 @@ use core::fmt::{self, Debug};
 use core::marker::PhantomData;
 use core::mem;
 
-use crate::polyfill::*;
+use crate::{polyfill::*, OrdStoredKey, OrdTotalOrder};
 
 use super::super::borrow::DormantMutRef;
 use super::super::node::{marker, Handle, NodeRef};
@@ -34,7 +34,13 @@ impl<K: Debug, V: Debug, O, A: Allocator + Clone> Debug for Entry<'_, K, V, O, A
 
 /// A view into a vacant entry in a `BTreeMap`.
 /// It is part of the [`Entry`] enum.
-pub struct VacantEntry<'a, K, V, O, A: Allocator + Clone = Global> {
+pub struct VacantEntry<
+    'a,
+    K,
+    V,
+    O = OrdTotalOrder<<K as OrdStoredKey>::DefaultComparisonKey>,
+    A: Allocator + Clone = Global,
+> {
     pub(super) key: K,
     /// `None` for a (empty) map without root
     pub(super) handle: Option<Handle<NodeRef<marker::Mut<'a>, K, V, marker::Leaf>, marker::Edge>>,
@@ -55,7 +61,13 @@ impl<K: Debug, V, O, A: Allocator + Clone> Debug for VacantEntry<'_, K, V, O, A>
 
 /// A view into an occupied entry in a `BTreeMap`.
 /// It is part of the [`Entry`] enum.
-pub struct OccupiedEntry<'a, K, V, O, A: Allocator + Clone = Global> {
+pub struct OccupiedEntry<
+    'a,
+    K,
+    V,
+    O = OrdTotalOrder<<K as OrdStoredKey>::DefaultComparisonKey>,
+    A: Allocator + Clone = Global,
+> {
     pub(super) handle: Handle<NodeRef<marker::Mut<'a>, K, V, marker::LeafOrInternal>, marker::KV>,
     pub(super) dormant_map: DormantMutRef<'a, BTreeMap<K, V, O, A>>,
 
@@ -76,7 +88,13 @@ impl<K: Debug, V: Debug, O, A: Allocator + Clone> Debug for OccupiedEntry<'_, K,
 ///
 /// Contains the occupied entry, and the value that was not inserted.
 #[cfg(feature = "map_try_insert")]
-pub struct OccupiedError<'a, K: 'a, V: 'a, O, A: Allocator + Clone = Global> {
+pub struct OccupiedError<
+    'a,
+    K: 'a,
+    V: 'a,
+    O = OrdTotalOrder<<K as OrdStoredKey>::DefaultComparisonKey>,
+    A: Allocator + Clone = Global,
+> {
     /// The entry in the map that was already occupied.
     pub entry: OccupiedEntry<'a, K, V, O, A>,
     /// The value which was not inserted, because the entry was already occupied.

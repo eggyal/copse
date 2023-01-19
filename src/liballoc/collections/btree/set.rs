@@ -169,7 +169,12 @@ pub struct Range<'a, T: 'a> {
 /// [`difference`]: BTreeSet::difference
 #[must_use = "this returns the difference as an iterator, \
               without modifying either input set"]
-pub struct Difference<'a, T: 'a, O, A: Allocator + Clone = Global> {
+pub struct Difference<
+    'a,
+    T: 'a,
+    O = OrdTotalOrder<<T as OrdStoredKey>::DefaultComparisonKey>,
+    A: Allocator + Clone = Global,
+> {
     inner: DifferenceInner<'a, T, O, A>,
     order: &'a O,
 }
@@ -220,7 +225,11 @@ impl<T: fmt::Debug, O: TotalOrder, A: Allocator + Clone> fmt::Debug for Differen
 /// [`symmetric_difference`]: BTreeSet::symmetric_difference
 #[must_use = "this returns the difference as an iterator, \
               without modifying either input set"]
-pub struct SymmetricDifference<'a, T: 'a, O>(MergeIterInner<Iter<'a, T>>, &'a O);
+pub struct SymmetricDifference<
+    'a,
+    T: 'a,
+    O = OrdTotalOrder<<T as OrdStoredKey>::DefaultComparisonKey>,
+>(MergeIterInner<Iter<'a, T>>, &'a O);
 
 impl<T: fmt::Debug, O> fmt::Debug for SymmetricDifference<'_, T, O> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -236,7 +245,12 @@ impl<T: fmt::Debug, O> fmt::Debug for SymmetricDifference<'_, T, O> {
 /// [`intersection`]: BTreeSet::intersection
 #[must_use = "this returns the intersection as an iterator, \
               without modifying either input set"]
-pub struct Intersection<'a, T: 'a, O, A: Allocator + Clone = Global> {
+pub struct Intersection<
+    'a,
+    T: 'a,
+    O = OrdTotalOrder<<T as OrdStoredKey>::DefaultComparisonKey>,
+    A: Allocator + Clone = Global,
+> {
     inner: IntersectionInner<'a, T, O, A>,
     order: &'a O,
 }
@@ -285,7 +299,10 @@ impl<T: Debug, O: TotalOrder, A: Allocator + Clone> Debug for Intersection<'_, T
 /// [`union`]: BTreeSet::union
 #[must_use = "this returns the union as an iterator, \
               without modifying either input set"]
-pub struct Union<'a, T: 'a, O>(MergeIterInner<Iter<'a, T>>, &'a O);
+pub struct Union<'a, T: 'a, O = OrdTotalOrder<<T as OrdStoredKey>::DefaultComparisonKey>>(
+    MergeIterInner<Iter<'a, T>>,
+    &'a O,
+);
 
 impl<T: fmt::Debug, O> fmt::Debug for Union<'_, T, O> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
