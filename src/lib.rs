@@ -145,9 +145,17 @@ pub use btree_map::BTreeMap;
 #[doc(no_inline)]
 pub use btree_set::BTreeSet;
 
-/// An immutable strict [total order] over the associated type `OrderedType`.
-/// 
+/// An immutable strict [total order] over the associated type [`OrderedType`].
+/// This means that for all `a`, `b` and `c`:
+///
+/// 1. exactly one of `a < b`, `a == b` or `a > b` remains true *throughout the
+///    life of `self`*;
+/// 2. `<` is the dual of `>`: that is, `a < b` if and only if `b > a`; and
+/// 3. `<` is transitive: `a < b` and `b < c` implies `a < c`.
+///    The same must hold for both `==` and `>`.
+///
 /// [total order]: https://en.wikipedia.org/wiki/Total_order
+/// [`OrderedType`]: TotalOrder::OrderedType
 pub trait TotalOrder {
     /// The type over which this total order is defined.
     type OrderedType: ?Sized;
@@ -230,9 +238,20 @@ impl<T: ?Sized + Ord> Copy for OrdTotalOrder<T> {}
 impl<T: ?Sized + Ord> TotalOrder for OrdTotalOrder<T> {
     type OrderedType = T;
 
+    // Delegate to `T`'s implementation of [`Ord`].
     fn cmp(&self, this: &T, that: &T) -> Ordering {
         this.cmp(that)
     }
+
+    // The default implementations of the following methods are overidden so that
+    // they delegate to `T`'s implementations of [`PartialEq`] and [`PartialOrd`]
+    // rather than merely using its implementation of [`Ord`].
+    //
+    // If, as required by those traits, `T`'s implementations are consistent with
+    // one another, then these overrides will have no effect.  They are provided
+    // for (erroneous) cases where the implementations are inconsistent (such as
+    // in `liballoc::collections::binary_heap::tests::panic_safe`), thus enabling
+    // copse to imitate liballoc with greater fidelity.
 
     fn eq(&self, this: &T, that: &T) -> bool {
         this == that
