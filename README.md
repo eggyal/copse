@@ -99,6 +99,6 @@ This crate defines a number of feature flags, none of which are enabled by defau
 [`TotalOrder`]: https://docs.rs/copse/latest/copse/trait.TotalOrder.html
 [TotalOrder::OrderedType]: https://docs.rs/copse/latest/copse/trait.TotalOrder.html#associatedtype.OrderedType
 [`LookupKey<O>`]: https://docs.rs/copse/latest/copse/trait.LookupKey.html
-[`OrdTotalOrder`]: https://docs.rs/copse/latest/copse/struct.OrdTotalOrder.html
-[`OrdStoredKey`]: https://docs.rs/copse/latest/copse/trait.OrdStoredKey.html
-[OrdStoredKey::DefaultComparisonKey]: https://docs.rs/copse/latest/copse/trait.OrdStoredKey.html#associatedtype.DefaultComparisonKey
+[`OrdTotalOrder`]: https://docs.rs/copse/latest/copse/default/struct.OrdTotalOrder.html
+[`OrdStoredKey`]: https://docs.rs/copse/latest/copse/default/trait.OrdStoredKey.html
+[OrdStoredKey::DefaultComparisonKey]: https://docs.rs/copse/latest/copse/default/trait.OrdStoredKey.html#associatedtype.DefaultComparisonKey

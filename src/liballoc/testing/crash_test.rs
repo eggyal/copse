@@ -1,5 +1,5 @@
 // We avoid relying on anything else in the crate, apart from the `Debug` and `OrdStoredKey` traits.
-use crate::OrdStoredKey;
+use crate::default::OrdStoredKey;
 use alloc::fmt::Debug;
 use std::cmp::Ordering;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};

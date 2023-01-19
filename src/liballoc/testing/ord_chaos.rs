@@ -1,4 +1,4 @@
-use crate::OrdStoredKey;
+use crate::default::OrdStoredKey;
 use std::cell::Cell;
 use std::cmp::Ordering::{self, *};
 use std::ptr;

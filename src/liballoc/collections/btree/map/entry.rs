@@ -2,7 +2,10 @@ use core::fmt::{self, Debug};
 use core::marker::PhantomData;
 use core::mem;
 
-use crate::{polyfill::*, OrdStoredKey, OrdTotalOrder};
+use crate::{
+    default::{OrdStoredKey, OrdTotalOrder},
+    polyfill::*,
+};
 
 use super::super::borrow::DormantMutRef;
 use super::super::node::{marker, Handle, NodeRef};
