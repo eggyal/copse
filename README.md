@@ -61,29 +61,29 @@ In addition to the type parameters familiar from the standard library collection
 collections are additionally parameterised by the type of the [`TotalOrder`].  If the
 total order is not explicitly named, it defaults to the [`OrdTotalOrder`] for the storage
 key's [`DefaultComparisonKey`][OrdStoredKey::DefaultComparisonKey], which yields behaviour
-analagous to the standard library collections (i.e. sorted by the `Ord` trait).  If you
+analagous to the standard library collections (i.e. sorted by the [`Ord`] trait).  If you
 find yourself using these items, then you should probably ditch copse for the standard
 library instead.
 
 # Crate feature flags
-This crate defines a number of feature flags, none of which are enabled by default:
+This crate defines a number of [feature flags], none of which are enabled by default:
 
-* the `std` feature provides [`OrdStoredKey`] implementations for some standard library
+* the [`std`] feature provides [`OrdStoredKey`] implementations for some standard library
   types that are not present in libcore + liballoc, namely [`OsString`], [`OsStr`],
   [`PathBuf`] and [`Path`];
 
-* each feature in the `unstable` set corresponds to the like-named unstable feature in
+* each feature in the [`unstable`] set corresponds to the like-named unstable feature in
   the standard library's B-Tree and BinaryHeap collection implementations, all of which
   enable APIs that are wholly contained within the library and therefore do not require
   a nightly toolchain;
 
-* the `btreemap_alloc` feature corresponds to the like-named unstable feature in the
+* the [`btreemap_alloc`] feature corresponds to the like-named unstable feature in the
   standard library's B-Tree collection implementations (namely that which enables their
   `new_in` associated functions)—however (as of rustc v1.66.1) this feature requires
-  the `allocator_api` unstable compiler feature that is only available with a nightly
+  the [`allocator_api`] unstable compiler feature that is only available with a nightly
   toolchain; and
 
-* all other features (combined into the `nightly` set) do not affect the APIs presented
+* all other features (combined into the [`nightly`] set) do not affect the APIs presented
   by this crate, but instead switch the implementation to use those features internally
   as are used by the standard library's implementations—these features should be of
   little use or interest to library users, but are nevertheless included to ease
@@ -107,3 +107,10 @@ This crate defines a number of feature flags, none of which are enabled by defau
 [`OrdTotalOrder`]: https://docs.rs/copse/latest/copse/default/struct.OrdTotalOrder.html
 [`OrdStoredKey`]: https://docs.rs/copse/latest/copse/default/trait.OrdStoredKey.html
 [OrdStoredKey::DefaultComparisonKey]: https://docs.rs/copse/latest/copse/default/trait.OrdStoredKey.html#associatedtype.DefaultComparisonKey
+
+[feature flags]: https://docs.rs/crate/copse/latest/features
+[`std`]: https://docs.rs/crate/copse/latest/features#std
+[`unstable`]: https://docs.rs/crate/copse/latest/features#unstable
+[`btreemap_alloc`]: https://docs.rs/crate/copse/latest/features#btreemap_alloc
+[`allocator_api`]: https://docs.rs/crate/copse/latest/features#allocator_api
+[`nightly`]: https://docs.rs/crate/copse/latest/features#nightly
