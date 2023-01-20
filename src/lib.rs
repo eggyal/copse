@@ -123,23 +123,24 @@ pub trait TotalOrder {
 }
 
 /// A type that can be sorted by total orders of type parameter `O`.
-/// 
+///
 /// A value of the self type will be ordered under total orders of type parameter `O` by
-/// the value that is returned by this trait's [`key`][SortableBy::key] method.
+/// the value that is returned by this trait's [`sort_key`][SortableBy::sort_key]
+/// method.
 ///
 /// For example, if `MyOrdering` is a [`TotalOrder<OrderedType = str>`], then you may
 /// wish to implement [`SortableBy<MyOrdering>`] for both `String` and `str` in order that
 /// keys of either type can be used to search collections ordered by any total order of
 /// type `MyOrdering`.
-/// 
+///
 /// **Note that you must provide such implementation even for the reflexive/no-op case,
 /// which will almost always be desirable.**  Such reflexive case cannot be currently be
 /// provided for you by way of a blanket implementation because that would conflict with
 /// the [blanket borrowing implementation] that is provided for the default
 /// [`OrdTotalOrder`][default::OrdTotalOrder].
-/// 
+///
 /// [blanket borrowing implementation]: https://docs.rs/copse/latest/copse/trait.SortableBy.html#impl-SortableBy%3COrdTotalOrder%3CT%3E%3E-for-K
 pub trait SortableBy<O: TotalOrder> {
     /// Return the value by which `self` is ordered under total orders of type `O`.
-    fn key(&self) -> &O::OrderedType;
+    fn sort_key(&self) -> &O::OrderedType;
 }

@@ -40,13 +40,13 @@ impl TotalOrder for OrderByNthByte {
 
 // define lookup key types for collections sorted by our total order
 impl SortableBy<OrderByNthByte> for [u8] {
-    fn key(&self) -> &[u8] { self }
+    fn sort_key(&self) -> &[u8] { self }
 }
 impl SortableBy<OrderByNthByte> for str {
-    fn key(&self) -> &[u8] { self.as_bytes() }
+    fn sort_key(&self) -> &[u8] { self.as_bytes() }
 }
 impl SortableBy<OrderByNthByte> for String {
-    fn key(&self) -> &[u8] { SortableBy::<OrderByNthByte>::key(self.as_str()) }
+    fn sort_key(&self) -> &[u8] { SortableBy::<OrderByNthByte>::sort_key(self.as_str()) }
 }
 
 // create a collection using our total order

@@ -45,7 +45,7 @@ where
                 None => return Some(next),
             };
 
-            if self.order.ne(next.0.key(), peeked.0.key()) {
+            if self.order.ne(next.0.sort_key(), peeked.0.sort_key()) {
                 return Some(next);
             }
         }

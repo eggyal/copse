@@ -102,10 +102,10 @@ impl<K: OrdStoredKey, V> BTreeMap<K, V> {
         if let Some(mut previous) = keys.next() {
             for next in keys {
                 assert!(
-                    self.order.lt(previous.key(), next.key()),
+                    self.order.lt(previous.sort_key(), next.sort_key()),
                     "{:?} >= {:?}",
-                    previous.key(),
-                    next.key()
+                    previous.sort_key(),
+                    next.sort_key()
                 );
                 previous = next;
             }
@@ -392,22 +392,22 @@ where
 
     // Iterate forwards, trying to mutate to unique values
     for (i, (k, v)) in map.iter_mut().enumerate() {
-        assert_eq!(k.key(), T::try_from(i).unwrap().key());
-        assert_eq!((*v).key(), zero.key());
+        assert_eq!(k.sort_key(), T::try_from(i).unwrap().sort_key());
+        assert_eq!((*v).sort_key(), zero.sort_key());
         *v = T::try_from(i + 1).unwrap();
     }
 
     // Iterate backwards, checking that mutations succeeded and trying to mutate again
     for (i, (k, v)) in map.iter_mut().rev().enumerate() {
-        assert_eq!(k.key(), T::try_from(size - i - 1).unwrap().key());
-        assert_eq!((*v).key(), T::try_from(size - i).unwrap().key());
+        assert_eq!(k.sort_key(), T::try_from(size - i - 1).unwrap().sort_key());
+        assert_eq!((*v).sort_key(), T::try_from(size - i).unwrap().sort_key());
         *v = T::try_from(2 * size - i).unwrap();
     }
 
     // Check that backward mutations succeeded
     for (i, (k, v)) in map.iter_mut().enumerate() {
-        assert_eq!(k.key(), T::try_from(i).unwrap().key());
-        assert_eq!((*v).key(), T::try_from(size + i + 1).unwrap().key());
+        assert_eq!(k.sort_key(), T::try_from(i).unwrap().sort_key());
+        assert_eq!((*v).sort_key(), T::try_from(size + i + 1).unwrap().sort_key());
     }
     map.check();
 }
@@ -815,7 +815,7 @@ fn test_range_finding_ill_order_in_range_ord() {
     struct CompositeKey(i32, EvilTwin);
 
     impl SortableBy<OrdTotalOrder<EvilTwin>> for CompositeKey {
-        fn key(&self) -> &EvilTwin {
+        fn sort_key(&self) -> &EvilTwin {
             &self.1
         }
     }

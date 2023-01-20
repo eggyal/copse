@@ -589,14 +589,14 @@ impl<K, V, O> BTreeMap<K, V, O> {
     ///
     /// // define lookup key types for collections sorted by our total order
     /// # impl SortableBy<OrderByNthByte> for [u8] {
-    /// #     fn key(&self) -> &[u8] { self }
+    /// #     fn sort_key(&self) -> &[u8] { self }
     /// # }
     /// # impl SortableBy<OrderByNthByte> for str {
-    /// #     fn key(&self) -> &[u8] { self.as_bytes() }
+    /// #     fn sort_key(&self) -> &[u8] { self.as_bytes() }
     /// # }
     /// impl SortableBy<OrderByNthByte> for String {
     ///     // etc
-    /// #     fn key(&self) -> &[u8] { SortableBy::<OrderByNthByte>::key(self.as_str()) }
+    /// #     fn sort_key(&self) -> &[u8] { SortableBy::<OrderByNthByte>::sort_key(self.as_str()) }
     /// }
     ///
     /// // create a map using our total order
@@ -1190,7 +1190,7 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
             self_iter,
             other_iter,
             &mut self.length,
-            |a: &(K, V), b: &(K, V)| self.order.cmp(a.0.key(), b.0.key()),
+            |a: &(K, V), b: &(K, V)| self.order.cmp(a.0.sort_key(), b.0.sort_key()),
             (*self.alloc).clone(),
         )
     }
@@ -2124,7 +2124,7 @@ impl<K: SortableBy<O>, V, O: TotalOrder + Default> FromIterator<(K, V)> for BTre
 
         // use stable sort to preserve the insertion order.
         let order = O::default();
-        inputs.sort_by(|a, b| order.cmp(a.0.key(), b.0.key()));
+        inputs.sort_by(|a, b| order.cmp(a.0.sort_key(), b.0.sort_key()));
         BTreeMap::bulk_build_from_sorted_iter(inputs, order, Global)
     }
 }
@@ -2242,7 +2242,7 @@ impl<K: SortableBy<O>, V, O: TotalOrder + Default, const N: usize> From<[(K, V);
 
         // use stable sort to preserve the insertion order.
         let order = O::default();
-        arr.sort_by(|a, b| order.cmp(a.0.key(), b.0.key()));
+        arr.sort_by(|a, b| order.cmp(a.0.sort_key(), b.0.sort_key()));
         BTreeMap::bulk_build_from_sorted_iter(arr, order, Global)
     }
 }

@@ -352,14 +352,14 @@ impl<T, O> BTreeSet<T, O> {
     ///
     /// // define lookup key types for collections sorted by our total order
     /// # impl SortableBy<OrderByNthByte> for [u8] {
-    /// #     fn key(&self) -> &[u8] { self }
+    /// #     fn sort_key(&self) -> &[u8] { self }
     /// # }
     /// # impl SortableBy<OrderByNthByte> for str {
-    /// #     fn key(&self) -> &[u8] { self.as_bytes() }
+    /// #     fn sort_key(&self) -> &[u8] { self.as_bytes() }
     /// # }
     /// impl SortableBy<OrderByNthByte> for String {
     ///     // etc
-    /// #     fn key(&self) -> &[u8] { SortableBy::<OrderByNthByte>::key(self.as_str()) }
+    /// #     fn sort_key(&self) -> &[u8] { SortableBy::<OrderByNthByte>::sort_key(self.as_str()) }
     /// }
     ///
     /// // create a set using our total order
@@ -482,8 +482,8 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
             };
         Difference {
             inner: match (
-                self.map.order.cmp(self_min.key(), other_max.key()),
-                self.map.order.cmp(self_max.key(), other_min.key()),
+                self.map.order.cmp(self_min.sort_key(), other_max.sort_key()),
+                self.map.order.cmp(self_max.sort_key(), other_min.sort_key()),
             ) {
                 (Greater, _) | (_, Less) => DifferenceInner::Iterate(self.iter()),
                 (Equal, _) => {
@@ -580,8 +580,8 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
         };
         Intersection {
             inner: match (
-                self.map.order.cmp(self_min.key(), other_max.key()),
-                self.map.order.cmp(self_max.key(), other_min.key()),
+                self.map.order.cmp(self_min.sort_key(), other_max.sort_key()),
+                self.map.order.cmp(self_max.sort_key(), other_min.sort_key()),
             ) {
                 (Greater, _) | (_, Less) => IntersectionInner::Answer(None),
                 (Equal, _) => IntersectionInner::Answer(Some(self_min)),
@@ -760,14 +760,14 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
                 return false; // other is empty
             };
         let mut self_iter = self.iter();
-        match self.map.order.cmp(self_min.key(), other_min.key()) {
+        match self.map.order.cmp(self_min.sort_key(), other_min.sort_key()) {
             Less => return false,
             Equal => {
                 self_iter.next();
             }
             Greater => (),
         }
-        match self.map.order.cmp(self_max.key(), other_max.key()) {
+        match self.map.order.cmp(self_max.sort_key(), other_max.sort_key()) {
             Greater => return false,
             Equal => {
                 self_iter.next_back();
@@ -788,7 +788,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
             while let Some(self1) = self_next {
                 match other_iter
                     .next()
-                    .map_or(Less, |other1| self.map.order.cmp(self1.key(), other1.key()))
+                    .map_or(Less, |other1| self.map.order.cmp(self1.sort_key(), other1.sort_key()))
                 {
                     Less => return false,
                     Equal => self_next = self_iter.next(),
@@ -1262,7 +1262,7 @@ impl<T: SortableBy<O>, O: TotalOrder + Default> FromIterator<T> for BTreeSet<T, 
 
         // use stable sort to preserve the insertion order.
         let order = O::default();
-        inputs.sort_by(|a, b| order.cmp(a.key(), b.key()));
+        inputs.sort_by(|a, b| order.cmp(a.sort_key(), b.sort_key()));
         BTreeSet::from_sorted_iter(inputs.into_iter(), order, Global)
     }
 }
@@ -1292,7 +1292,7 @@ impl<T: SortableBy<O>, O: TotalOrder + Default, const N: usize> From<[T; N]> for
 
         // use stable sort to preserve the insertion order.
         let order = O::default();
-        arr.sort_by(|a, b| order.cmp(a.key(), b.key()));
+        arr.sort_by(|a, b| order.cmp(a.sort_key(), b.sort_key()));
         let iter = IntoIterator::into_iter(arr).map(|k| (k, SetValZST::default()));
         let map = BTreeMap::bulk_build_from_sorted_iter(iter, order, Global);
         BTreeSet { map }
@@ -1502,8 +1502,8 @@ impl<T: SortableBy<O> + Clone, O: TotalOrder + Clone, A: Allocator + Clone>
     }
 }
 
-impl<T: SortableBy<O> + Clone, O: TotalOrder + Clone, A: Allocator + Clone> BitOr<&BTreeSet<T, O, A>>
-    for &BTreeSet<T, O, A>
+impl<T: SortableBy<O> + Clone, O: TotalOrder + Clone, A: Allocator + Clone>
+    BitOr<&BTreeSet<T, O, A>> for &BTreeSet<T, O, A>
 {
     type Output = BTreeSet<T, O, A>;
 
@@ -1662,7 +1662,7 @@ impl<'a, T: SortableBy<O>, O: TotalOrder, A: Allocator + Clone> Iterator
                 let mut self_next = self_iter.next()?;
                 loop {
                     match other_iter.peek().map_or(Less, |&other_next| {
-                        self.order.cmp(self_next.key(), other_next.key())
+                        self.order.cmp(self_next.sort_key(), other_next.sort_key())
                     }) {
                         Less => return Some(self_next),
                         Equal => {
@@ -1716,7 +1716,7 @@ impl<'a, T: SortableBy<O>, O: TotalOrder> Iterator for SymmetricDifference<'a, T
 
     fn next(&mut self) -> Option<&'a T> {
         loop {
-            let (a_next, b_next) = self.0.nexts(|&a, &b| self.1.cmp(a.key(), b.key()));
+            let (a_next, b_next) = self.0.nexts(|&a, &b| self.1.cmp(a.sort_key(), b.sort_key()));
             if a_next.and(b_next).is_none() {
                 return a_next.or(b_next);
             }
@@ -1765,7 +1765,7 @@ impl<'a, T: SortableBy<O>, O: TotalOrder, A: Allocator + Clone> Iterator
                 let mut a_next = a.next()?;
                 let mut b_next = b.next()?;
                 loop {
-                    match self.order.cmp(a_next.key(), b_next.key()) {
+                    match self.order.cmp(a_next.sort_key(), b_next.sort_key()) {
                         Less => a_next = a.next()?,
                         Greater => b_next = b.next()?,
                         Equal => return Some(a_next),
@@ -1810,7 +1810,7 @@ impl<'a, T: SortableBy<O>, O: TotalOrder> Iterator for Union<'a, T, O> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
-        let (a_next, b_next) = self.0.nexts(|&a, &b| self.1.cmp(a.key(), b.key()));
+        let (a_next, b_next) = self.0.nexts(|&a, &b| self.1.cmp(a.sort_key(), b.sort_key()));
         a_next.or(b_next)
     }
 

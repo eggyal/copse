@@ -67,7 +67,7 @@ impl<T: ?Sized + Ord> TotalOrder for OrdTotalOrder<T> {
 }
 
 impl<T: ?Sized + Ord, K: ?Sized + Borrow<T>> SortableBy<OrdTotalOrder<T>> for K {
-    fn key(&self) -> &T {
+    fn sort_key(&self) -> &T {
         self.borrow()
     }
 }

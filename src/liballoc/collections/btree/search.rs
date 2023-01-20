@@ -110,7 +110,7 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
         // remain the same, but an adversarial implementation could change between calls (#81138).
         let (start, end) = (range.start_bound(), range.end_bound());
         match (start, end) {
-            (Bound::Excluded(s), Bound::Excluded(e)) if order.eq(s.key(), e.key()) => {
+            (Bound::Excluded(s), Bound::Excluded(e)) if order.eq(s.sort_key(), e.sort_key()) => {
                 cfg_if! {
                     if #[cfg(feature = "specialization")] {
                         if is_set {
@@ -124,7 +124,7 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
                 }
             }
             (Bound::Included(s) | Bound::Excluded(s), Bound::Included(e) | Bound::Excluded(e))
-                if order.gt(s.key(), e.key()) =>
+                if order.gt(s.sort_key(), e.sort_key()) =>
             {
                 cfg_if! {
                     if #[cfg(feature = "specialization")] {
@@ -253,7 +253,7 @@ impl<BorrowType, K, V, Type> NodeRef<BorrowType, K, V, Type> {
         let keys = node.keys();
         debug_assert!(start_index <= keys.len());
         for (offset, k) in unsafe { keys.get_unchecked(start_index..) }.iter().enumerate() {
-            match order.cmp(key.key(), k.key()) {
+            match order.cmp(key.sort_key(), k.sort_key()) {
                 Ordering::Greater => {}
                 Ordering::Equal => return IndexResult::KV(start_index + offset),
                 Ordering::Less => return IndexResult::Edge(start_index + offset),
