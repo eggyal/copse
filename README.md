@@ -61,7 +61,7 @@ In addition to the type parameters familiar from the standard library collection
 collections are additionally parameterised by the type of the [`TotalOrder`].  If the
 total order is not explicitly named, it defaults to the [`OrdTotalOrder`] for the storage
 key's [`OrdKeyType`], which yields behaviour analagous to the standard library
-collections (i.e. sorted by the [`Ord`] trait).  Explicitly using these items indicates
+collections (i.e. sorted by the [`Ord`] trait); explicitly using these items indicates
 that you could (and probably *should*) ditch copse for the standard library instead.
 
 # Crate feature flags
