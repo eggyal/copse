@@ -49,11 +49,11 @@ pub use btree_map::BTreeMap;
 #[doc(no_inline)]
 pub use btree_set::BTreeSet;
 
-/// An immutable strict [total order] over the associated type [`OrderedType`].
+/// A strict [total order] over the associated type [`OrderedType`].
+///
 /// This means that for all `a`, `b` and `c`:
 ///
-/// 1. exactly one of `a < b`, `a == b` or `a > b` remains true *throughout the
-///    life of `self`*;
+/// 1. exactly one of `a < b`, `a == b` or `a > b` is true;
 /// 2. `<` is the dual of `>`: that is, `a < b` if and only if `b > a`; and
 /// 3. `<` is transitive: `a < b` and `b < c` implies `a < c`.
 ///    The same must hold for both `==` and `>`.
@@ -64,10 +64,11 @@ pub trait TotalOrder {
     /// The type over which this total order is defined.
     type OrderedType: ?Sized;
 
-    /// Compare two values and return the position of `this` relative
-    /// to `that` according to this total order.
+    /// This method returns the [`Ordering`] between `this` and `that` under
+    /// this total order.
     ///
-    /// The comparison must satisfy both transitivity and duality.
+    /// By convention, `self.cmp(&this, &that)` returns the ordering matching
+    /// the expression `this <operator> that` if true.
     fn cmp(&self, this: &Self::OrderedType, that: &Self::OrderedType) -> Ordering;
 
     /// Tests whether `this == that` under this total order.  It is a logic
