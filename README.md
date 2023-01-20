@@ -10,8 +10,8 @@ cannot be provided as an [`Ord`] implementation for any type.
 In the standard library's collections, certain lookups can be performed using a key of type
 `&Q` where the collection's storage key type `K` implements [`Borrow<Q>`]; for example, one
 can use `&str` keys to perform lookups into collections that store `String` keys.  This is
-possible because the [`Borrow`] trait stipulates that borrowed values must preserve [`Ord`]
-order.
+possible because `String: Borrow<str>` and the [`Borrow`] trait stipulates that borrowed
+values must preserve [`Ord`] order.
 
 However, copse's collections do not use the [`Ord`] trait; instead, lookups can only ever
 be performed using the [`TotalOrder`] supplied upon collection creation.  This total order
