@@ -18,7 +18,8 @@
 #![cfg_attr(feature = "specialization", feature(specialization))]
 #![cfg_attr(feature = "trusted_len", feature(trusted_len))]
 // documentation controls
-#![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg))]
+#![cfg_attr(docsrs, feature(doc_auto_cfg, doc_cfg, doc_cfg_hide))]
+#![cfg_attr(docsrs, doc(cfg_hide(no_global_oom_handling)))]
 #![deny(missing_docs)]
 // linting controls
 #![cfg_attr(feature = "specialization", allow(incomplete_features))]
