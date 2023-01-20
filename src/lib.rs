@@ -122,25 +122,40 @@ pub trait TotalOrder {
     }
 }
 
-/// A type that can be sorted by total orders of type parameter `O`.
+/// A type that is sorted under total orders of type parameter `O` by its [`sort_key`].
 ///
-/// A value of the self type will be ordered under total orders of type parameter `O` by
-/// the value that is returned by this trait's [`sort_key`][SortableBy::sort_key]
-/// method.
+/// **Note that if you wish to use `O::OrderedType` itself, you must explicitly implement
+/// `SortableBy<O>` for it even though that implementation will typically be a no-op.**
+/// This case cannot be currently be provided for you by way of a blanket implementation
+/// because that would conflict with the [blanket borrowing implementation] that is
+/// provided for the default [`OrdTotalOrder`]; implementations for `O::OrderedType` that
+/// are not no-ops are strongly discouraged, as they are prone to causing considerable
+/// confusion: consider defining a distinct [`TotalOrder`] for any such use-case instead.
 ///
-/// For example, if `MyOrdering` is a [`TotalOrder<OrderedType = str>`], then you may
-/// wish to implement [`SortableBy<MyOrdering>`] for both `String` and `str` in order that
-/// keys of either type can be used to search collections ordered by any total order of
-/// type `MyOrdering`.
+/// # Example
+/// ```rust
+/// struct MyOrdering;
 ///
-/// **Note that you must provide such implementation even for the reflexive/no-op case,
-/// which will almost always be desirable.**  Such reflexive case cannot be currently be
-/// provided for you by way of a blanket implementation because that would conflict with
-/// the [blanket borrowing implementation] that is provided for the default
-/// [`OrdTotalOrder`][default::OrdTotalOrder].
+/// impl TotalOrder for MyOrdering {
+///     type OrderedType = str;
+///     fn cmp(&self, this: &str, that: &str) -> Ordering { this.cmp(that) }
+/// }
 ///
+/// impl SortableBy<MyOrdering> for String {
+///     fn sort_key(&self) -> &str { self.as_str() }
+/// }
+/// impl SortableBy<MyOrdering> for str {
+///     fn sort_by(&self) -> &str { self }
+/// }
+///
+/// let order = MyOrdering;
+/// assert!(order.lt(&String::from("a"), "b"));
+/// ```
+///
+/// [`sort_key`]: SortableBy::sort_key
 /// [blanket borrowing implementation]: https://docs.rs/copse/latest/copse/trait.SortableBy.html#impl-SortableBy%3COrdTotalOrder%3CT%3E%3E-for-K
-pub trait SortableBy<O: TotalOrder> {
-    /// Return the value by which `self` is ordered under total orders of type `O`.
+/// [`OrdTotalOrder`]: default::OrdTotalOrder
+pub trait SortableBy<O: ?Sized + TotalOrder> {
+    /// Extract the sort key by which `self` is ordered under total orders of type `O`.
     fn sort_key(&self) -> &O::OrderedType;
 }

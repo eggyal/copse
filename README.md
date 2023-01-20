@@ -14,10 +14,10 @@ possible because `String: Borrow<str>` and the [`Borrow`] trait stipulates that 
 values must preserve [`Ord`] order.
 
 However, copse's collections do not use the [`Ord`] trait; instead, lookups can only ever
-be performed using the [`TotalOrder`] supplied upon collection creation.  This total order
-can only compare values of its [`OrderedType`][TotalOrder::OrderedType] associated type,
-and hence keys used for lookups must implement [`SortableBy<O>`] in order that the
-conversion can be performed.
+be performed using the [`TotalOrder`] of type `O` that was supplied upon collection
+creation.  This total order can only compare values of its [`OrderedType`] associated type,
+and hence keys used for lookups must implement [`SortableBy<O>`] in order that the sort key
+can be extracted.
 
 # Example
 ```rust
@@ -60,10 +60,9 @@ assert!(set.contains("jjjjjjjjjj"));
 In addition to the type parameters familiar from the standard library collections, copse's
 collections are additionally parameterised by the type of the [`TotalOrder`].  If the
 total order is not explicitly named, it defaults to the [`OrdTotalOrder`] for the storage
-key's [`DefaultComparisonKey`][OrdStoredKey::DefaultComparisonKey], which yields behaviour
-analagous to the standard library collections (i.e. sorted by the [`Ord`] trait).  If you
-find yourself using these items, then you should probably ditch copse for the standard
-library instead.
+key's [`DefaultComparisonKey`], which yields behaviour analagous to the standard library
+collections (i.e. sorted by the [`Ord`] trait).  Explicitly using these items indicates
+that you could (and probably *should*) ditch copse for the standard library instead.
 
 # Crate feature flags
 This crate defines a number of [feature flags], none of which are enabled by default:
@@ -102,11 +101,11 @@ This crate defines a number of [feature flags], none of which are enabled by def
 [`Path`]: https://doc.rust-lang.org/std/path/struct.Path.html
 
 [`TotalOrder`]: https://docs.rs/copse/latest/copse/trait.TotalOrder.html
-[TotalOrder::OrderedType]: https://docs.rs/copse/latest/copse/trait.TotalOrder.html#associatedtype.OrderedType
+[`OrderedType`]: https://docs.rs/copse/latest/copse/trait.TotalOrder.html#associatedtype.OrderedType
 [`SortableBy<O>`]: https://docs.rs/copse/latest/copse/trait.SortableBy.html
 [`OrdTotalOrder`]: https://docs.rs/copse/latest/copse/default/struct.OrdTotalOrder.html
 [`OrdStoredKey`]: https://docs.rs/copse/latest/copse/default/trait.OrdStoredKey.html
-[OrdStoredKey::DefaultComparisonKey]: https://docs.rs/copse/latest/copse/default/trait.OrdStoredKey.html#associatedtype.DefaultComparisonKey
+[`DefaultComparisonKey`]: https://docs.rs/copse/latest/copse/default/trait.OrdStoredKey.html#associatedtype.DefaultComparisonKey
 
 [feature flags]: https://docs.rs/crate/copse/latest/features
 [`std`]: https://docs.rs/crate/copse/latest/features#std
