@@ -58,7 +58,7 @@ pub struct Instance<'a> {
 }
 
 impl OrdStoredKey for Instance<'_> {
-    type DefaultComparisonKey = Self;
+    type OrdKeyType = Self;
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

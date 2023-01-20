@@ -13,7 +13,7 @@ pub enum Cyclic3 {
 use Cyclic3::*;
 
 impl OrdStoredKey for Cyclic3 {
-    type DefaultComparisonKey = Self;
+    type OrdKeyType = Self;
 }
 
 impl PartialOrd for Cyclic3 {
@@ -63,7 +63,7 @@ impl Governor {
 pub struct Governed<'a, T>(pub T, pub &'a Governor);
 
 impl<T: Ord> OrdStoredKey for Governed<'_, T> {
-    type DefaultComparisonKey = Self;
+    type OrdKeyType = Self;
 }
 
 impl<T: Ord> PartialOrd for Governed<'_, T> {

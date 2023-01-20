@@ -286,7 +286,7 @@ mod tests;
 /// [pop]: BinaryHeap::pop
 /// [peek]: BinaryHeap::peek
 /// [peek\_mut]: BinaryHeap::peek_mut
-pub struct BinaryHeap<T, O = OrdTotalOrder<<T as OrdStoredKey>::DefaultComparisonKey>> {
+pub struct BinaryHeap<T, O = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>> {
     data: Vec<T>,
     order: O,
 }
@@ -301,7 +301,7 @@ pub struct BinaryHeap<T, O = OrdTotalOrder<<T as OrdStoredKey>::DefaultCompariso
 pub struct PeekMut<
     'a,
     T: 'a + SortableBy<O>,
-    O: TotalOrder = OrdTotalOrder<<T as OrdStoredKey>::DefaultComparisonKey>,
+    O: TotalOrder = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>,
 > {
     heap: &'a mut BinaryHeap<T, O>,
     // If a set_len + sift_down are required, this is Some. If a &mut T has not
@@ -1453,7 +1453,7 @@ cfg_if! {
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 #[cfg(feature = "binary_heap_into_iter_sorted")]
 #[derive(Clone, Debug)]
-pub struct IntoIterSorted<T, O = OrdTotalOrder<<T as OrdStoredKey>::DefaultComparisonKey>> {
+pub struct IntoIterSorted<T, O = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>> {
     inner: BinaryHeap<T, O>,
 }
 
@@ -1534,7 +1534,7 @@ impl<T> FusedIterator for Drain<'_, T> {}
 pub struct DrainSorted<
     'a,
     T: SortableBy<O>,
-    O: TotalOrder = OrdTotalOrder<<T as OrdStoredKey>::DefaultComparisonKey>,
+    O: TotalOrder = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>,
 > {
     inner: &'a mut BinaryHeap<T, O>,
 }

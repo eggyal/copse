@@ -81,7 +81,7 @@ use crate::polyfill::*;
 /// ```
 pub struct BTreeSet<
     T,
-    O = OrdTotalOrder<<T as OrdStoredKey>::DefaultComparisonKey>,
+    O = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>,
     A: Allocator + Clone = Global,
 > {
     map: BTreeMap<T, SetValZST, O, A>,
@@ -175,7 +175,7 @@ pub struct Range<'a, T: 'a> {
 pub struct Difference<
     'a,
     T: 'a,
-    O = OrdTotalOrder<<T as OrdStoredKey>::DefaultComparisonKey>,
+    O = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>,
     A: Allocator + Clone = Global,
 > {
     inner: DifferenceInner<'a, T, O, A>,
@@ -231,7 +231,7 @@ impl<T: fmt::Debug, O: TotalOrder, A: Allocator + Clone> fmt::Debug for Differen
 pub struct SymmetricDifference<
     'a,
     T: 'a,
-    O = OrdTotalOrder<<T as OrdStoredKey>::DefaultComparisonKey>,
+    O = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>,
 >(MergeIterInner<Iter<'a, T>>, &'a O);
 
 impl<T: fmt::Debug, O> fmt::Debug for SymmetricDifference<'_, T, O> {
@@ -251,7 +251,7 @@ impl<T: fmt::Debug, O> fmt::Debug for SymmetricDifference<'_, T, O> {
 pub struct Intersection<
     'a,
     T: 'a,
-    O = OrdTotalOrder<<T as OrdStoredKey>::DefaultComparisonKey>,
+    O = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>,
     A: Allocator + Clone = Global,
 > {
     inner: IntersectionInner<'a, T, O, A>,
@@ -302,7 +302,7 @@ impl<T: Debug, O: TotalOrder, A: Allocator + Clone> Debug for Intersection<'_, T
 /// [`union`]: BTreeSet::union
 #[must_use = "this returns the union as an iterator, \
               without modifying either input set"]
-pub struct Union<'a, T: 'a, O = OrdTotalOrder<<T as OrdStoredKey>::DefaultComparisonKey>>(
+pub struct Union<'a, T: 'a, O = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>>(
     MergeIterInner<Iter<'a, T>>,
     &'a O,
 );

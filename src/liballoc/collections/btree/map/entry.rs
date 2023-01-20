@@ -41,7 +41,7 @@ pub struct VacantEntry<
     'a,
     K,
     V,
-    O = OrdTotalOrder<<K as OrdStoredKey>::DefaultComparisonKey>,
+    O = OrdTotalOrder<<K as OrdStoredKey>::OrdKeyType>,
     A: Allocator + Clone = Global,
 > {
     pub(super) key: K,
@@ -68,7 +68,7 @@ pub struct OccupiedEntry<
     'a,
     K,
     V,
-    O = OrdTotalOrder<<K as OrdStoredKey>::DefaultComparisonKey>,
+    O = OrdTotalOrder<<K as OrdStoredKey>::OrdKeyType>,
     A: Allocator + Clone = Global,
 > {
     pub(super) handle: Handle<NodeRef<marker::Mut<'a>, K, V, marker::LeafOrInternal>, marker::KV>,
@@ -95,7 +95,7 @@ pub struct OccupiedError<
     'a,
     K: 'a,
     V: 'a,
-    O = OrdTotalOrder<<K as OrdStoredKey>::DefaultComparisonKey>,
+    O = OrdTotalOrder<<K as OrdStoredKey>::OrdKeyType>,
     A: Allocator + Clone = Global,
 > {
     /// The entry in the map that was already occupied.

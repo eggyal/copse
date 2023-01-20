@@ -71,7 +71,7 @@ impl<K: OrdStoredKey, V> BTreeMap<K, V> {
     // guarantee that all keys are unique, just that adjacent keys are unique.
     fn check(&self)
     where
-        K::DefaultComparisonKey: Debug,
+        K::OrdKeyType: Debug,
     {
         self.check_invariants();
         self.assert_strictly_ascending();
@@ -96,7 +96,7 @@ impl<K: OrdStoredKey, V> BTreeMap<K, V> {
     // Panics if the keys are not in strictly ascending order.
     fn assert_strictly_ascending(&self)
     where
-        K::DefaultComparisonKey: Debug,
+        K::OrdKeyType: Debug,
     {
         let mut keys = self.keys();
         if let Some(mut previous) = keys.next() {
@@ -380,7 +380,7 @@ fn test_iter_rev() {
 fn do_test_iter_mut_mutation<T>(size: usize)
 where
     T: Copy + OrdStoredKey + TryFrom<usize>,
-    T::DefaultComparisonKey: Debug,
+    T::OrdKeyType: Debug,
     <T as TryFrom<usize>>::Error: Debug,
 {
     let zero = T::try_from(0).unwrap();
@@ -417,7 +417,7 @@ where
 struct Align32(usize);
 
 impl OrdStoredKey for Align32 {
-    type DefaultComparisonKey = Self;
+    type OrdKeyType = Self;
 }
 
 impl TryFrom<usize> for Align32 {
@@ -1437,7 +1437,7 @@ fn test_bad_zst() {
     struct Bad;
 
     impl OrdStoredKey for Bad {
-        type DefaultComparisonKey = Self;
+        type OrdKeyType = Self;
     }
 
     impl PartialEq for Bad {

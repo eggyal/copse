@@ -105,10 +105,10 @@ impl<T: ?Sized + Ord, K: ?Sized + Borrow<T>> SortableBy<OrdTotalOrder<T>> for K 
 ///
 /// For example, a collection that stores [`String`] under the default total order will use
 /// [`str`] as the comparison type owing to the implementation of this trait for [`String`].
-pub trait OrdStoredKey: SortableBy<OrdTotalOrder<Self::DefaultComparisonKey>> {
+pub trait OrdStoredKey: SortableBy<OrdTotalOrder<Self::OrdKeyType>> {
     /// The comparison type to be used by collections storing keys of `Self` type and using the
     /// default [`OrdTotalOrder`] total order.
-    type DefaultComparisonKey: ?Sized + Ord;
+    type OrdKeyType: ?Sized + Ord;
 }
 
 macro_rules! ord_keys {
@@ -119,7 +119,7 @@ macro_rules! ord_keys {
     ($(#[$attrs:meta])* $({$($g:tt)+})? $t:ty => $m:ty $(, $($rest:tt)*)?) => {
         $(#[$attrs])*
         impl$(<$($g)+>)? OrdStoredKey for $t {
-            type DefaultComparisonKey = $m;
+            type OrdKeyType = $m;
         }
 
         $(ord_keys!($($rest)*);)?

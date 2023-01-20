@@ -176,7 +176,7 @@ pub(super) const MIN_LEN: usize = node::MIN_LEN_AFTER_SPLIT;
 pub struct BTreeMap<
     K,
     V,
-    O = OrdTotalOrder<<K as OrdStoredKey>::DefaultComparisonKey>,
+    O = OrdTotalOrder<<K as OrdStoredKey>::OrdKeyType>,
     A: Allocator + Clone = Global,
 > {
     root: Option<Root<K, V>>,

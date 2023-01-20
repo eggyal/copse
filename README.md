@@ -60,7 +60,7 @@ assert!(set.contains("jjjjjjjjjj"));
 In addition to the type parameters familiar from the standard library collections, copse's
 collections are additionally parameterised by the type of the [`TotalOrder`].  If the
 total order is not explicitly named, it defaults to the [`OrdTotalOrder`] for the storage
-key's [`DefaultComparisonKey`], which yields behaviour analagous to the standard library
+key's [`OrdKeyType`], which yields behaviour analagous to the standard library
 collections (i.e. sorted by the [`Ord`] trait).  Explicitly using these items indicates
 that you could (and probably *should*) ditch copse for the standard library instead.
 
@@ -105,7 +105,7 @@ This crate defines a number of [feature flags], none of which are enabled by def
 [`SortableBy<O>`]: https://docs.rs/copse/latest/copse/trait.SortableBy.html
 [`OrdTotalOrder`]: https://docs.rs/copse/latest/copse/default/struct.OrdTotalOrder.html
 [`OrdStoredKey`]: https://docs.rs/copse/latest/copse/default/trait.OrdStoredKey.html
-[`DefaultComparisonKey`]: https://docs.rs/copse/latest/copse/default/trait.OrdStoredKey.html#associatedtype.DefaultComparisonKey
+[`OrdKeyType`]: https://docs.rs/copse/latest/copse/default/trait.OrdStoredKey.html#associatedtype.OrdKeyType
 
 [feature flags]: https://docs.rs/crate/copse/latest/features
 [`std`]: https://docs.rs/crate/copse/latest/features#std
