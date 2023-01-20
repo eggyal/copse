@@ -302,6 +302,7 @@ mod definitions {
     }
 
     #[cfg(not(feature = "is_sorted"))]
+    #[allow(clippy::needless_borrow)]
     impl<I: Iterator> IterIsSorted for I {
         fn is_sorted_by<F>(mut self, compare: F) -> bool
         where
