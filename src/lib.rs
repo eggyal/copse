@@ -161,18 +161,22 @@ pub trait TotalOrder {
     }
 }
 
-/// A type that is sorted under total orders of type parameter `O` by its [`sort_key`].
+/// A type that is sortable by its [`sort_key`] under total orders of type parameter `O`.
 ///
-/// **Note that if you wish to use `O::OrderedType` itself, you must explicitly implement
-/// `SortableBy<O>` for it even though that implementation will typically be a no-op.**
-/// This case cannot be currently be provided for you by way of a blanket implementation
-/// because that would conflict with the [blanket borrowing implementation] that is
-/// provided for the default [`OrdTotalOrder`]; implementations for `O::OrderedType` that
-/// are not no-ops are strongly discouraged, as they are prone to causing considerable
-/// confusion: consider defining a distinct [`TotalOrder`] for any such use-case instead.
+/// **Note that if you wish to use `O::OrderedType` itself with copse's collections, you
+/// must explicitly implement `SortableBy<O>` for it even though that implementation will
+/// typically be a no-op.**  This case cannot currently be provided for you by way of a
+/// blanket implementation because that would conflict with the [blanket borrowing
+/// implementation] that is provided for the default [`OrdTotalOrder`]; implementations
+/// for `O::OrderedType` that are not no-ops are strongly discouraged, as they are prone
+/// to causing considerable confusion—for any such use-case, consider defining a distinct
+/// [`TotalOrder`] instead.
 ///
 /// # Example
 /// ```rust
+/// use copse::{BTreeSet, SortableBy, TotalOrder};
+/// use std::cmp::Ordering;
+/// 
 /// struct MyOrdering;
 ///
 /// impl TotalOrder for MyOrdering {
@@ -187,12 +191,13 @@ pub trait TotalOrder {
 ///     fn sort_by(&self) -> &str { self }
 /// }
 ///
-/// let order = MyOrdering;
-/// assert!(order.lt(&String::from("a"), "b"));
+/// let mut set = BTreeSet::new(MyOrdering);
+/// set.insert(String::from("a"));
+/// assert!(set.contains("a"));
 /// ```
 ///
 /// [`sort_key`]: SortableBy::sort_key
-/// [blanket borrowing implementation]: https://docs.rs/copse/latest/copse/trait.SortableBy.html#impl-SortableBy%3COrdTotalOrder%3CT%3E%3E-for-K
+/// [blanket borrowing implementation]: #impl-SortableBy%3COrdTotalOrder%3CT%3E%3E-for-K
 /// [`OrdTotalOrder`]: default::OrdTotalOrder
 pub trait SortableBy<O: ?Sized + TotalOrder> {
     /// Extract the sort key by which `self` is ordered under total orders of type `O`.
