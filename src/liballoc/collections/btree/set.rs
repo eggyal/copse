@@ -3,7 +3,7 @@
 
 use crate::{
     default::{OrdStoredKey, OrdTotalOrder},
-    LookupKey, TotalOrder,
+    SortableBy, TotalOrder,
 };
 use alloc::vec::Vec;
 use core::cmp::Ordering::{self, Equal, Greater, Less};
@@ -329,7 +329,7 @@ impl<T, O> BTreeSet<T, O> {
     /// # Examples
     ///
     /// ```
-    /// # use copse::{BTreeSet, LookupKey, TotalOrder};
+    /// # use copse::{BTreeSet, SortableBy, TotalOrder};
     /// # use std::cmp::Ordering;
     /// #
     /// // define a total order
@@ -351,15 +351,15 @@ impl<T, O> BTreeSet<T, O> {
     /// }
     ///
     /// // define lookup key types for collections sorted by our total order
-    /// # impl LookupKey<OrderByNthByte> for [u8] {
+    /// # impl SortableBy<OrderByNthByte> for [u8] {
     /// #     fn key(&self) -> &[u8] { self }
     /// # }
-    /// # impl LookupKey<OrderByNthByte> for str {
+    /// # impl SortableBy<OrderByNthByte> for str {
     /// #     fn key(&self) -> &[u8] { self.as_bytes() }
     /// # }
-    /// impl LookupKey<OrderByNthByte> for String {
+    /// impl SortableBy<OrderByNthByte> for String {
     ///     // etc
-    /// #     fn key(&self) -> &[u8] { LookupKey::<OrderByNthByte>::key(self.as_str()) }
+    /// #     fn key(&self) -> &[u8] { SortableBy::<OrderByNthByte>::key(self.as_str()) }
     /// }
     ///
     /// // create a set using our total order
@@ -429,8 +429,8 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn range<K: ?Sized, R>(&self, range: R) -> Range<'_, T>
     where
-        K: LookupKey<O>,
-        T: LookupKey<O>,
+        K: SortableBy<O>,
+        T: SortableBy<O>,
         O: TotalOrder,
         R: RangeBounds<K>,
     {
@@ -459,7 +459,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn difference<'a>(&'a self, other: &'a BTreeSet<T, O, A>) -> Difference<'a, T, O, A>
     where
-        T: LookupKey<O>,
+        T: SortableBy<O>,
         O: TotalOrder,
     {
         let (self_min, self_max) =
@@ -533,7 +533,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
         other: &'a BTreeSet<T, O, A>,
     ) -> SymmetricDifference<'a, T, O>
     where
-        T: LookupKey<O>,
+        T: SortableBy<O>,
         O: TotalOrder,
     {
         SymmetricDifference(MergeIterInner::new(self.iter(), other.iter()), &self.map.order)
@@ -561,7 +561,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn intersection<'a>(&'a self, other: &'a BTreeSet<T, O, A>) -> Intersection<'a, T, O, A>
     where
-        T: LookupKey<O>,
+        T: SortableBy<O>,
         O: TotalOrder,
     {
         let (self_min, self_max) = if let (Some(self_min), Some(self_max)) =
@@ -618,7 +618,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn union<'a>(&'a self, other: &'a BTreeSet<T, O, A>) -> Union<'a, T, O>
     where
-        T: LookupKey<O>,
+        T: SortableBy<O>,
         O: TotalOrder,
     {
         Union(MergeIterInner::new(self.iter(), other.iter()), &self.map.order)
@@ -661,8 +661,8 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn contains<Q: ?Sized>(&self, value: &Q) -> bool
     where
-        T: LookupKey<O>,
-        Q: LookupKey<O>,
+        T: SortableBy<O>,
+        Q: SortableBy<O>,
         O: TotalOrder,
     {
         self.map.contains_key(value)
@@ -686,8 +686,8 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn get<Q: ?Sized>(&self, value: &Q) -> Option<&T>
     where
-        T: LookupKey<O>,
-        Q: LookupKey<O>,
+        T: SortableBy<O>,
+        Q: SortableBy<O>,
         O: TotalOrder,
     {
         Recover::get(&self.map, value)
@@ -713,7 +713,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     #[must_use]
     pub fn is_disjoint(&self, other: &BTreeSet<T, O, A>) -> bool
     where
-        T: LookupKey<O>,
+        T: SortableBy<O>,
         O: TotalOrder,
     {
         self.intersection(other).next().is_none()
@@ -739,7 +739,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     #[must_use]
     pub fn is_subset(&self, other: &BTreeSet<T, O, A>) -> bool
     where
-        T: LookupKey<O>,
+        T: SortableBy<O>,
         O: TotalOrder,
     {
         // Same result as self.difference(other).next().is_none()
@@ -822,7 +822,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     #[must_use]
     pub fn is_superset(&self, other: &BTreeSet<T, O, A>) -> bool
     where
-        T: LookupKey<O>,
+        T: SortableBy<O>,
         O: TotalOrder,
     {
         other.is_subset(self)
@@ -848,7 +848,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     #[must_use]
     pub fn first(&self) -> Option<&T>
     where
-        T: LookupKey<O>,
+        T: SortableBy<O>,
         O: TotalOrder,
     {
         self.map.first_key_value().map(|(k, _)| k)
@@ -874,7 +874,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     #[must_use]
     pub fn last(&self) -> Option<&T>
     where
-        T: LookupKey<O>,
+        T: SortableBy<O>,
         O: TotalOrder,
     {
         self.map.last_key_value().map(|(k, _)| k)
@@ -898,7 +898,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn pop_first(&mut self) -> Option<T>
     where
-        T: LookupKey<O>,
+        T: SortableBy<O>,
         O: TotalOrder,
     {
         self.map.pop_first().map(|kv| kv.0)
@@ -922,7 +922,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn pop_last(&mut self) -> Option<T>
     where
-        T: LookupKey<O>,
+        T: SortableBy<O>,
         O: TotalOrder,
     {
         self.map.pop_last().map(|kv| kv.0)
@@ -954,7 +954,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn insert(&mut self, value: T) -> bool
     where
-        T: LookupKey<O>,
+        T: SortableBy<O>,
         O: TotalOrder,
     {
         self.map.insert(value, SetValZST::default()).is_none()
@@ -977,7 +977,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn replace(&mut self, value: T) -> Option<T>
     where
-        T: LookupKey<O>,
+        T: SortableBy<O>,
         O: TotalOrder,
     {
         Recover::<T>::replace(&mut self.map, value)
@@ -1003,8 +1003,8 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn remove<Q: ?Sized>(&mut self, value: &Q) -> bool
     where
-        T: LookupKey<O>,
-        Q: LookupKey<O>,
+        T: SortableBy<O>,
+        Q: SortableBy<O>,
         O: TotalOrder,
     {
         self.map.remove(value).is_some()
@@ -1028,8 +1028,8 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn take<Q: ?Sized>(&mut self, value: &Q) -> Option<T>
     where
-        T: LookupKey<O>,
-        Q: LookupKey<O>,
+        T: SortableBy<O>,
+        Q: SortableBy<O>,
         O: TotalOrder,
     {
         Recover::take(&mut self.map, value)
@@ -1052,7 +1052,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn retain<F>(&mut self, mut f: F)
     where
-        T: LookupKey<O>,
+        T: SortableBy<O>,
         O: TotalOrder,
         F: FnMut(&T) -> bool,
     {
@@ -1089,7 +1089,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn append(&mut self, other: &mut Self)
     where
-        T: LookupKey<O>,
+        T: SortableBy<O>,
         O: Clone + TotalOrder,
         A: Clone,
     {
@@ -1125,9 +1125,9 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// assert!(b.contains(&17));
     /// assert!(b.contains(&41));
     /// ```
-    pub fn split_off<Q: ?Sized + LookupKey<O>>(&mut self, value: &Q) -> Self
+    pub fn split_off<Q: ?Sized + SortableBy<O>>(&mut self, value: &Q) -> Self
     where
-        T: LookupKey<O>,
+        T: SortableBy<O>,
         O: TotalOrder + Clone,
         A: Clone,
     {
@@ -1168,7 +1168,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
         }
         fn drain_filter<'a, F>(&'a mut self, pred: F) -> DrainFilter<'a, T, F, A>
         where
-            T: LookupKey<O>,
+            T: SortableBy<O>,
             O: TotalOrder,
             F: 'a + FnMut(&T) -> bool,
         {
@@ -1252,7 +1252,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     }
 }
 
-impl<T: LookupKey<O>, O: TotalOrder + Default> FromIterator<T> for BTreeSet<T, O> {
+impl<T: SortableBy<O>, O: TotalOrder + Default> FromIterator<T> for BTreeSet<T, O> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> BTreeSet<T, O> {
         let mut inputs: Vec<_> = iter.into_iter().collect();
 
@@ -1267,7 +1267,7 @@ impl<T: LookupKey<O>, O: TotalOrder + Default> FromIterator<T> for BTreeSet<T, O
     }
 }
 
-impl<T: LookupKey<O>, O: TotalOrder, A: Allocator + Clone> BTreeSet<T, O, A> {
+impl<T: SortableBy<O>, O: TotalOrder, A: Allocator + Clone> BTreeSet<T, O, A> {
     fn from_sorted_iter<I: Iterator<Item = T>>(iter: I, order: O, alloc: A) -> BTreeSet<T, O, A> {
         let iter = iter.map(|k| (k, SetValZST::default()));
         let map = BTreeMap::bulk_build_from_sorted_iter(iter, order, alloc);
@@ -1275,7 +1275,7 @@ impl<T: LookupKey<O>, O: TotalOrder, A: Allocator + Clone> BTreeSet<T, O, A> {
     }
 }
 
-impl<T: LookupKey<O>, O: TotalOrder + Default, const N: usize> From<[T; N]> for BTreeSet<T, O> {
+impl<T: SortableBy<O>, O: TotalOrder + Default, const N: usize> From<[T; N]> for BTreeSet<T, O> {
     /// Converts a `[T; N]` into a `BTreeSet<T>`.
     ///
     /// ```
@@ -1385,7 +1385,7 @@ impl<T, F, A: Allocator + Clone> FusedIterator for DrainFilter<'_, T, F, A> wher
 {
 }
 
-impl<T: LookupKey<O>, O: TotalOrder, A: Allocator + Clone> Extend<T> for BTreeSet<T, O, A> {
+impl<T: SortableBy<O>, O: TotalOrder, A: Allocator + Clone> Extend<T> for BTreeSet<T, O, A> {
     #[inline]
     fn extend<Iter: IntoIterator<Item = T>>(&mut self, iter: Iter) {
         iter.into_iter().for_each(move |elem| {
@@ -1400,7 +1400,7 @@ impl<T: LookupKey<O>, O: TotalOrder, A: Allocator + Clone> Extend<T> for BTreeSe
     }
 }
 
-impl<'a, T: 'a + LookupKey<O> + Copy, O: TotalOrder, A: Allocator + Clone> Extend<&'a T>
+impl<'a, T: 'a + SortableBy<O> + Copy, O: TotalOrder, A: Allocator + Clone> Extend<&'a T>
     for BTreeSet<T, O, A>
 {
     fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
@@ -1421,7 +1421,7 @@ impl<T, O: Default> Default for BTreeSet<T, O> {
     }
 }
 
-impl<T: LookupKey<O> + Clone, O: TotalOrder + Clone, A: Allocator + Clone> Sub<&BTreeSet<T, O, A>>
+impl<T: SortableBy<O> + Clone, O: TotalOrder + Clone, A: Allocator + Clone> Sub<&BTreeSet<T, O, A>>
     for &BTreeSet<T, O, A>
 {
     type Output = BTreeSet<T, O, A>;
@@ -1448,7 +1448,7 @@ impl<T: LookupKey<O> + Clone, O: TotalOrder + Clone, A: Allocator + Clone> Sub<&
     }
 }
 
-impl<T: LookupKey<O> + Clone, O: TotalOrder + Clone, A: Allocator + Clone>
+impl<T: SortableBy<O> + Clone, O: TotalOrder + Clone, A: Allocator + Clone>
     BitXor<&BTreeSet<T, O, A>> for &BTreeSet<T, O, A>
 {
     type Output = BTreeSet<T, O, A>;
@@ -1475,7 +1475,7 @@ impl<T: LookupKey<O> + Clone, O: TotalOrder + Clone, A: Allocator + Clone>
     }
 }
 
-impl<T: LookupKey<O> + Clone, O: TotalOrder + Clone, A: Allocator + Clone>
+impl<T: SortableBy<O> + Clone, O: TotalOrder + Clone, A: Allocator + Clone>
     BitAnd<&BTreeSet<T, O, A>> for &BTreeSet<T, O, A>
 {
     type Output = BTreeSet<T, O, A>;
@@ -1502,7 +1502,7 @@ impl<T: LookupKey<O> + Clone, O: TotalOrder + Clone, A: Allocator + Clone>
     }
 }
 
-impl<T: LookupKey<O> + Clone, O: TotalOrder + Clone, A: Allocator + Clone> BitOr<&BTreeSet<T, O, A>>
+impl<T: SortableBy<O> + Clone, O: TotalOrder + Clone, A: Allocator + Clone> BitOr<&BTreeSet<T, O, A>>
     for &BTreeSet<T, O, A>
 {
     type Output = BTreeSet<T, O, A>;
@@ -1651,7 +1651,7 @@ impl<T, O, A: Allocator + Clone> Clone for Difference<'_, T, O, A> {
         }
     }
 }
-impl<'a, T: LookupKey<O>, O: TotalOrder, A: Allocator + Clone> Iterator
+impl<'a, T: SortableBy<O>, O: TotalOrder, A: Allocator + Clone> Iterator
     for Difference<'a, T, O, A>
 {
     type Item = &'a T;
@@ -1701,7 +1701,7 @@ impl<'a, T: LookupKey<O>, O: TotalOrder, A: Allocator + Clone> Iterator
     }
 }
 
-impl<T: LookupKey<O>, O: TotalOrder, A: Allocator + Clone> FusedIterator
+impl<T: SortableBy<O>, O: TotalOrder, A: Allocator + Clone> FusedIterator
     for Difference<'_, T, O, A>
 {
 }
@@ -1711,7 +1711,7 @@ impl<T, O> Clone for SymmetricDifference<'_, T, O> {
         SymmetricDifference(self.0.clone(), self.1)
     }
 }
-impl<'a, T: LookupKey<O>, O: TotalOrder> Iterator for SymmetricDifference<'a, T, O> {
+impl<'a, T: SortableBy<O>, O: TotalOrder> Iterator for SymmetricDifference<'a, T, O> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
@@ -1736,7 +1736,7 @@ impl<'a, T: LookupKey<O>, O: TotalOrder> Iterator for SymmetricDifference<'a, T,
     }
 }
 
-impl<T: LookupKey<O>, O: TotalOrder> FusedIterator for SymmetricDifference<'_, T, O> {}
+impl<T: SortableBy<O>, O: TotalOrder> FusedIterator for SymmetricDifference<'_, T, O> {}
 
 impl<T, O: Clone, A: Allocator + Clone> Clone for Intersection<'_, T, O, A> {
     fn clone(&self) -> Self {
@@ -1754,7 +1754,7 @@ impl<T, O: Clone, A: Allocator + Clone> Clone for Intersection<'_, T, O, A> {
         }
     }
 }
-impl<'a, T: LookupKey<O>, O: TotalOrder, A: Allocator + Clone> Iterator
+impl<'a, T: SortableBy<O>, O: TotalOrder, A: Allocator + Clone> Iterator
     for Intersection<'a, T, O, A>
 {
     type Item = &'a T;
@@ -1796,7 +1796,7 @@ impl<'a, T: LookupKey<O>, O: TotalOrder, A: Allocator + Clone> Iterator
     }
 }
 
-impl<T: LookupKey<O>, O: TotalOrder, A: Allocator + Clone> FusedIterator
+impl<T: SortableBy<O>, O: TotalOrder, A: Allocator + Clone> FusedIterator
     for Intersection<'_, T, O, A>
 {
 }
@@ -1806,7 +1806,7 @@ impl<T, O> Clone for Union<'_, T, O> {
         Union(self.0.clone(), self.1)
     }
 }
-impl<'a, T: LookupKey<O>, O: TotalOrder> Iterator for Union<'a, T, O> {
+impl<'a, T: SortableBy<O>, O: TotalOrder> Iterator for Union<'a, T, O> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
@@ -1825,7 +1825,7 @@ impl<'a, T: LookupKey<O>, O: TotalOrder> Iterator for Union<'a, T, O> {
     }
 }
 
-impl<T: LookupKey<O>, O: TotalOrder> FusedIterator for Union<'_, T, O> {}
+impl<T: SortableBy<O>, O: TotalOrder> FusedIterator for Union<'_, T, O> {}
 
 #[cfg(test)]
 mod tests;

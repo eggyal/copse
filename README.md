@@ -16,7 +16,7 @@ values must preserve [`Ord`] order.
 However, copse's collections do not use the [`Ord`] trait; instead, lookups can only ever
 be performed using the [`TotalOrder`] supplied upon collection creation.  This total order
 can only compare values of its [`OrderedType`][TotalOrder::OrderedType] associated type,
-and hence keys used for lookups must implement [`LookupKey<O>`] in order that the
+and hence keys used for lookups must implement [`SortableBy<O>`] in order that the
 conversion can be performed.
 
 # Example
@@ -39,14 +39,14 @@ impl TotalOrder for OrderByNthByte {
 }
 
 // define lookup key types for collections sorted by our total order
-impl LookupKey<OrderByNthByte> for [u8] {
+impl SortableBy<OrderByNthByte> for [u8] {
     fn key(&self) -> &[u8] { self }
 }
-impl LookupKey<OrderByNthByte> for str {
+impl SortableBy<OrderByNthByte> for str {
     fn key(&self) -> &[u8] { self.as_bytes() }
 }
-impl LookupKey<OrderByNthByte> for String {
-    fn key(&self) -> &[u8] { LookupKey::<OrderByNthByte>::key(self.as_str()) }
+impl SortableBy<OrderByNthByte> for String {
+    fn key(&self) -> &[u8] { SortableBy::<OrderByNthByte>::key(self.as_str()) }
 }
 
 // create a collection using our total order
@@ -103,7 +103,7 @@ This crate defines a number of [feature flags], none of which are enabled by def
 
 [`TotalOrder`]: https://docs.rs/copse/latest/copse/trait.TotalOrder.html
 [TotalOrder::OrderedType]: https://docs.rs/copse/latest/copse/trait.TotalOrder.html#associatedtype.OrderedType
-[`LookupKey<O>`]: https://docs.rs/copse/latest/copse/trait.LookupKey.html
+[`SortableBy<O>`]: https://docs.rs/copse/latest/copse/trait.SortableBy.html
 [`OrdTotalOrder`]: https://docs.rs/copse/latest/copse/default/struct.OrdTotalOrder.html
 [`OrdStoredKey`]: https://docs.rs/copse/latest/copse/default/trait.OrdStoredKey.html
 [OrdStoredKey::DefaultComparisonKey]: https://docs.rs/copse/latest/copse/default/trait.OrdStoredKey.html#associatedtype.DefaultComparisonKey

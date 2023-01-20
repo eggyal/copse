@@ -814,7 +814,7 @@ fn test_range_finding_ill_order_in_range_ord() {
     #[derive(PartialEq, Eq, PartialOrd, Ord)]
     struct CompositeKey(i32, EvilTwin);
 
-    impl LookupKey<OrdTotalOrder<EvilTwin>> for CompositeKey {
+    impl SortableBy<OrdTotalOrder<EvilTwin>> for CompositeKey {
         fn key(&self) -> &EvilTwin {
             &self.1
         }

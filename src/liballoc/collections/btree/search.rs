@@ -1,4 +1,4 @@
-use crate::{LookupKey, TotalOrder};
+use crate::{SortableBy, TotalOrder};
 use core::cmp::Ordering;
 use core::ops::{Bound, RangeBounds};
 
@@ -52,8 +52,8 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
         order: &O,
     ) -> SearchResult<BorrowType, K, V, marker::LeafOrInternal, marker::Leaf>
     where
-        K: LookupKey<O>,
-        Q: LookupKey<O>,
+        K: SortableBy<O>,
+        Q: SortableBy<O>,
         O: TotalOrder,
     {
         loop {
@@ -97,8 +97,8 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
         Handle<NodeRef<BorrowType, K, V, marker::Leaf>, marker::Edge>,
     >
     where
-        K: LookupKey<O>,
-        Q: LookupKey<O>,
+        K: SortableBy<O>,
+        Q: SortableBy<O>,
         R: RangeBounds<Q>,
         O: TotalOrder,
     {
@@ -180,8 +180,8 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
         bound: SearchBound<&'r Q>,
     ) -> (Handle<Self, marker::Edge>, SearchBound<&'r Q>)
     where
-        K: LookupKey<O>,
-        Q: ?Sized + LookupKey<O>,
+        K: SortableBy<O>,
+        Q: ?Sized + SortableBy<O>,
         O: TotalOrder,
     {
         let (edge_idx, bound) = self.find_lower_bound_index(order, bound);
@@ -196,8 +196,8 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
         bound: SearchBound<&'r Q>,
     ) -> (Handle<Self, marker::Edge>, SearchBound<&'r Q>)
     where
-        K: LookupKey<O>,
-        Q: ?Sized + LookupKey<O>,
+        K: SortableBy<O>,
+        Q: ?Sized + SortableBy<O>,
         O: TotalOrder,
     {
         let (edge_idx, bound) = unsafe { self.find_upper_bound_index(order, bound, 0) };
@@ -220,8 +220,8 @@ impl<BorrowType, K, V, Type> NodeRef<BorrowType, K, V, Type> {
         order: &O,
     ) -> SearchResult<BorrowType, K, V, Type, Type>
     where
-        K: LookupKey<O>,
-        Q: LookupKey<O>,
+        K: SortableBy<O>,
+        Q: SortableBy<O>,
         O: TotalOrder,
     {
         match unsafe { self.find_key_index(key, order, 0) } {
@@ -245,8 +245,8 @@ impl<BorrowType, K, V, Type> NodeRef<BorrowType, K, V, Type> {
         start_index: usize,
     ) -> IndexResult
     where
-        K: LookupKey<O>,
-        Q: LookupKey<O>,
+        K: SortableBy<O>,
+        Q: SortableBy<O>,
         O: TotalOrder,
     {
         let node = self.reborrow();
@@ -273,8 +273,8 @@ impl<BorrowType, K, V, Type> NodeRef<BorrowType, K, V, Type> {
         bound: SearchBound<&'r Q>,
     ) -> (usize, SearchBound<&'r Q>)
     where
-        K: LookupKey<O>,
-        Q: ?Sized + LookupKey<O>,
+        K: SortableBy<O>,
+        Q: ?Sized + SortableBy<O>,
         O: TotalOrder,
     {
         match bound {
@@ -303,8 +303,8 @@ impl<BorrowType, K, V, Type> NodeRef<BorrowType, K, V, Type> {
         start_index: usize,
     ) -> (usize, SearchBound<&'r Q>)
     where
-        K: LookupKey<O>,
-        Q: ?Sized + LookupKey<O>,
+        K: SortableBy<O>,
+        Q: ?Sized + SortableBy<O>,
         O: TotalOrder,
     {
         match bound {

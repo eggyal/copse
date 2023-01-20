@@ -5,7 +5,7 @@
 //! Use of these defaults negates the purpose of the copse crate, and indicates that
 //! you should probably be using the standard library's collections instead.
 
-use crate::{LookupKey, TotalOrder};
+use crate::{SortableBy, TotalOrder};
 use alloc::{boxed::Box, vec::Vec};
 use core::{borrow::Borrow, cmp::Ordering, marker::PhantomData};
 
@@ -66,7 +66,7 @@ impl<T: ?Sized + Ord> TotalOrder for OrdTotalOrder<T> {
     }
 }
 
-impl<T: ?Sized + Ord, K: ?Sized + Borrow<T>> LookupKey<OrdTotalOrder<T>> for K {
+impl<T: ?Sized + Ord, K: ?Sized + Borrow<T>> SortableBy<OrdTotalOrder<T>> for K {
     fn key(&self) -> &T {
         self.borrow()
     }
@@ -81,7 +81,7 @@ impl<T: ?Sized + Ord, K: ?Sized + Borrow<T>> LookupKey<OrdTotalOrder<T>> for K {
 ///
 /// For example, a collection that stores [`String`] under the default total order will use
 /// [`str`] as the comparison type owing to the implementation of this trait for [`String`].
-pub trait OrdStoredKey: LookupKey<OrdTotalOrder<Self::DefaultComparisonKey>> {
+pub trait OrdStoredKey: SortableBy<OrdTotalOrder<Self::DefaultComparisonKey>> {
     /// The comparison type to be used by collections storing keys of `Self` type and using the
     /// default [`OrdTotalOrder`] total order.
     type DefaultComparisonKey: ?Sized + Ord;

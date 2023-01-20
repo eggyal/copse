@@ -17,7 +17,7 @@
 //! [dir_graph]: https://en.wikipedia.org/wiki/Directed_graph
 //!
 //! ```
-//! use copse::{BinaryHeap, LookupKey, TotalOrder};
+//! use copse::{BinaryHeap, SortableBy, TotalOrder};
 //! use std::cmp::Ordering;
 //!
 //! #[derive(Copy, Clone)]
@@ -37,7 +37,7 @@
 //!     }
 //! }
 //!
-//! impl LookupKey<ReversedCostOrder> for State {
+//! impl SortableBy<ReversedCostOrder> for State {
 //!     fn key(&self) -> &State { self }
 //! }
 //!
@@ -156,7 +156,7 @@ use cfg_if::cfg_if;
 use super::SpecExtend;
 use crate::{
     default::{OrdStoredKey, OrdTotalOrder},
-    LookupKey, TotalOrder,
+    SortableBy, TotalOrder,
 };
 
 #[cfg(test)]
@@ -241,7 +241,7 @@ mod tests;
 /// This makes `heap.pop()` return the smallest value instead of the greatest one.
 ///
 /// ```
-/// use copse::{BinaryHeap, LookupKey, TotalOrder};
+/// use copse::{BinaryHeap, SortableBy, TotalOrder};
 /// use std::cmp::Ordering;
 ///
 /// struct ReversedOrder;
@@ -252,7 +252,7 @@ mod tests;
 ///     }
 /// }
 ///
-/// impl LookupKey<ReversedOrder> for i32 {
+/// impl SortableBy<ReversedOrder> for i32 {
 ///     fn key(&self) -> &i32 { self }
 /// }
 ///
@@ -300,7 +300,7 @@ pub struct BinaryHeap<T, O = OrdTotalOrder<<T as OrdStoredKey>::DefaultCompariso
 /// [`peek_mut`]: BinaryHeap::peek_mut
 pub struct PeekMut<
     'a,
-    T: 'a + LookupKey<O>,
+    T: 'a + SortableBy<O>,
     O: TotalOrder = OrdTotalOrder<<T as OrdStoredKey>::DefaultComparisonKey>,
 > {
     heap: &'a mut BinaryHeap<T, O>,
@@ -309,13 +309,13 @@ pub struct PeekMut<
     original_len: Option<NonZeroUsize>,
 }
 
-impl<T: LookupKey<O> + fmt::Debug, O: TotalOrder> fmt::Debug for PeekMut<'_, T, O> {
+impl<T: SortableBy<O> + fmt::Debug, O: TotalOrder> fmt::Debug for PeekMut<'_, T, O> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("PeekMut").field(&self.heap.data[0]).finish()
     }
 }
 
-impl<T: LookupKey<O>, O: TotalOrder> Drop for PeekMut<'_, T, O> {
+impl<T: SortableBy<O>, O: TotalOrder> Drop for PeekMut<'_, T, O> {
     fn drop(&mut self) {
         if let Some(original_len) = self.original_len {
             // SAFETY: That's how many elements were in the Vec at the time of
@@ -331,7 +331,7 @@ impl<T: LookupKey<O>, O: TotalOrder> Drop for PeekMut<'_, T, O> {
     }
 }
 
-impl<T: LookupKey<O>, O: TotalOrder> Deref for PeekMut<'_, T, O> {
+impl<T: SortableBy<O>, O: TotalOrder> Deref for PeekMut<'_, T, O> {
     type Target = T;
     fn deref(&self) -> &T {
         debug_assert!(!self.heap.is_empty());
@@ -340,7 +340,7 @@ impl<T: LookupKey<O>, O: TotalOrder> Deref for PeekMut<'_, T, O> {
     }
 }
 
-impl<T: LookupKey<O>, O: TotalOrder> DerefMut for PeekMut<'_, T, O> {
+impl<T: SortableBy<O>, O: TotalOrder> DerefMut for PeekMut<'_, T, O> {
     fn deref_mut(&mut self) -> &mut T {
         debug_assert!(!self.heap.is_empty());
 
@@ -368,7 +368,7 @@ impl<T: LookupKey<O>, O: TotalOrder> DerefMut for PeekMut<'_, T, O> {
     }
 }
 
-impl<'a, T: LookupKey<O>, O: TotalOrder> PeekMut<'a, T, O> {
+impl<'a, T: SortableBy<O>, O: TotalOrder> PeekMut<'a, T, O> {
     /// Removes the peeked value from the heap and returns it.
     pub fn pop(mut this: PeekMut<'a, T, O>) -> T {
         if let Some(original_len) = this.original_len.take() {
@@ -394,7 +394,7 @@ impl<T: Clone, O: Clone> Clone for BinaryHeap<T, O> {
     }
 }
 
-impl<T: LookupKey<O>, O: TotalOrder + Default> Default for BinaryHeap<T, O> {
+impl<T: SortableBy<O>, O: TotalOrder + Default> Default for BinaryHeap<T, O> {
     /// Creates an empty `BinaryHeap<T>`.
     #[inline]
     fn default() -> BinaryHeap<T, O> {
@@ -408,7 +408,7 @@ impl<T: fmt::Debug, O> fmt::Debug for BinaryHeap<T, O> {
     }
 }
 
-impl<T: LookupKey<O>, O: TotalOrder> BinaryHeap<T, O> {
+impl<T: SortableBy<O>, O: TotalOrder> BinaryHeap<T, O> {
     /// Creates an empty `BinaryHeap` as a max-heap.
     ///
     /// # Examples
@@ -1461,7 +1461,7 @@ pub struct IntoIterSorted<T, O = OrdTotalOrder<<T as OrdStoredKey>::DefaultCompa
 }
 
 #[cfg(feature = "binary_heap_into_iter_sorted")]
-impl<T: LookupKey<O>, O: TotalOrder> Iterator for IntoIterSorted<T, O> {
+impl<T: SortableBy<O>, O: TotalOrder> Iterator for IntoIterSorted<T, O> {
     type Item = T;
 
     #[inline]
@@ -1477,13 +1477,13 @@ impl<T: LookupKey<O>, O: TotalOrder> Iterator for IntoIterSorted<T, O> {
 }
 
 #[cfg(feature = "binary_heap_into_iter_sorted")]
-impl<T: LookupKey<O>, O: TotalOrder> ExactSizeIterator for IntoIterSorted<T, O> {}
+impl<T: SortableBy<O>, O: TotalOrder> ExactSizeIterator for IntoIterSorted<T, O> {}
 
 #[cfg(feature = "binary_heap_into_iter_sorted")]
-impl<T: LookupKey<O>, O: TotalOrder> FusedIterator for IntoIterSorted<T, O> {}
+impl<T: SortableBy<O>, O: TotalOrder> FusedIterator for IntoIterSorted<T, O> {}
 
 #[cfg(all(feature = "binary_heap_into_iter_sorted", feature = "trusted_len"))]
-unsafe impl<T: LookupKey<O>, O: TotalOrder> TrustedLen for IntoIterSorted<T, O> {}
+unsafe impl<T: SortableBy<O>, O: TotalOrder> TrustedLen for IntoIterSorted<T, O> {}
 
 /// A draining iterator over the elements of a `BinaryHeap`.
 ///
@@ -1536,19 +1536,19 @@ impl<T> FusedIterator for Drain<'_, T> {}
 #[derive(Debug)]
 pub struct DrainSorted<
     'a,
-    T: LookupKey<O>,
+    T: SortableBy<O>,
     O: TotalOrder = OrdTotalOrder<<T as OrdStoredKey>::DefaultComparisonKey>,
 > {
     inner: &'a mut BinaryHeap<T, O>,
 }
 
 #[cfg(feature = "binary_heap_drain_sorted")]
-impl<'a, T: LookupKey<O>, O: TotalOrder> Drop for DrainSorted<'a, T, O> {
+impl<'a, T: SortableBy<O>, O: TotalOrder> Drop for DrainSorted<'a, T, O> {
     /// Removes heap elements in heap order.
     fn drop(&mut self) {
-        struct DropGuard<'r, 'a, T: LookupKey<O>, O: TotalOrder>(&'r mut DrainSorted<'a, T, O>);
+        struct DropGuard<'r, 'a, T: SortableBy<O>, O: TotalOrder>(&'r mut DrainSorted<'a, T, O>);
 
-        impl<'r, 'a, T: LookupKey<O>, O: TotalOrder> Drop for DropGuard<'r, 'a, T, O> {
+        impl<'r, 'a, T: SortableBy<O>, O: TotalOrder> Drop for DropGuard<'r, 'a, T, O> {
             fn drop(&mut self) {
                 while self.0.inner.pop().is_some() {}
             }
@@ -1563,7 +1563,7 @@ impl<'a, T: LookupKey<O>, O: TotalOrder> Drop for DrainSorted<'a, T, O> {
 }
 
 #[cfg(feature = "binary_heap_drain_sorted")]
-impl<T: LookupKey<O>, O: TotalOrder> Iterator for DrainSorted<'_, T, O> {
+impl<T: SortableBy<O>, O: TotalOrder> Iterator for DrainSorted<'_, T, O> {
     type Item = T;
 
     #[inline]
@@ -1579,15 +1579,15 @@ impl<T: LookupKey<O>, O: TotalOrder> Iterator for DrainSorted<'_, T, O> {
 }
 
 #[cfg(feature = "binary_heap_drain_sorted")]
-impl<T: LookupKey<O>, O: TotalOrder> ExactSizeIterator for DrainSorted<'_, T, O> {}
+impl<T: SortableBy<O>, O: TotalOrder> ExactSizeIterator for DrainSorted<'_, T, O> {}
 
 #[cfg(feature = "binary_heap_drain_sorted")]
-impl<T: LookupKey<O>, O: TotalOrder> FusedIterator for DrainSorted<'_, T, O> {}
+impl<T: SortableBy<O>, O: TotalOrder> FusedIterator for DrainSorted<'_, T, O> {}
 
 #[cfg(all(feature = "binary_heap_drain_sorted", feature = "trusted_len"))]
-unsafe impl<T: LookupKey<O>, O: TotalOrder> TrustedLen for DrainSorted<'_, T, O> {}
+unsafe impl<T: SortableBy<O>, O: TotalOrder> TrustedLen for DrainSorted<'_, T, O> {}
 
-impl<T: LookupKey<O>, O: TotalOrder + Default> From<Vec<T>> for BinaryHeap<T, O> {
+impl<T: SortableBy<O>, O: TotalOrder + Default> From<Vec<T>> for BinaryHeap<T, O> {
     /// Converts a `Vec<T>` into a `BinaryHeap<T>`.
     ///
     /// This conversion happens in-place, and has *O*(*n*) time complexity.
@@ -1598,7 +1598,7 @@ impl<T: LookupKey<O>, O: TotalOrder + Default> From<Vec<T>> for BinaryHeap<T, O>
     }
 }
 
-impl<T: LookupKey<O>, O: TotalOrder + Default, const N: usize> From<[T; N]> for BinaryHeap<T, O> {
+impl<T: SortableBy<O>, O: TotalOrder + Default, const N: usize> From<[T; N]> for BinaryHeap<T, O> {
     /// ```
     /// use copse::BinaryHeap;
     ///
@@ -1623,7 +1623,7 @@ impl<T, O> From<BinaryHeap<T, O>> for Vec<T> {
     }
 }
 
-impl<T: LookupKey<O>, O: TotalOrder + Default> FromIterator<T> for BinaryHeap<T, O> {
+impl<T: SortableBy<O>, O: TotalOrder + Default> FromIterator<T> for BinaryHeap<T, O> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> BinaryHeap<T, O> {
         BinaryHeap::from(iter.into_iter().collect::<Vec<_>>())
     }
@@ -1672,7 +1672,7 @@ impl<'a, T, O> IntoIterator for &'a BinaryHeap<T, O> {
     }
 }
 
-impl<T: LookupKey<O>, O: TotalOrder> Extend<T> for BinaryHeap<T, O> {
+impl<T: SortableBy<O>, O: TotalOrder> Extend<T> for BinaryHeap<T, O> {
     #[inline]
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         <Self as SpecExtend<I>>::spec_extend(self, iter);
@@ -1693,13 +1693,13 @@ impl<T: LookupKey<O>, O: TotalOrder> Extend<T> for BinaryHeap<T, O> {
 
 cfg_if! {
     if #[cfg(feature = "specialization")] {
-        impl<T: LookupKey<O>, O: TotalOrder, I: IntoIterator<Item = T>> SpecExtend<I> for BinaryHeap<T, O> {
+        impl<T: SortableBy<O>, O: TotalOrder, I: IntoIterator<Item = T>> SpecExtend<I> for BinaryHeap<T, O> {
             default fn spec_extend(&mut self, iter: I) {
                 self.extend_desugared(iter.into_iter());
             }
         }
 
-        impl<T: LookupKey<O>, O: TotalOrder> SpecExtend<Vec<T>> for BinaryHeap<T, O> {
+        impl<T: SortableBy<O>, O: TotalOrder> SpecExtend<Vec<T>> for BinaryHeap<T, O> {
             fn spec_extend(&mut self, ref mut other: Vec<T>) {
                 let start = self.data.len();
                 self.data.append(other);
@@ -1707,13 +1707,13 @@ cfg_if! {
             }
         }
 
-        impl<T: LookupKey<O>, O: TotalOrder> SpecExtend<BinaryHeap<T, O>> for BinaryHeap<T, O> {
+        impl<T: SortableBy<O>, O: TotalOrder> SpecExtend<BinaryHeap<T, O>> for BinaryHeap<T, O> {
             fn spec_extend(&mut self, ref mut other: BinaryHeap<T, O>) {
                 self.append(other);
             }
         }
     } else {
-        impl<T: LookupKey<O>, O: TotalOrder, I: IntoIterator<Item = T>> SpecExtend<I> for BinaryHeap<T, O> {
+        impl<T: SortableBy<O>, O: TotalOrder, I: IntoIterator<Item = T>> SpecExtend<I> for BinaryHeap<T, O> {
             fn spec_extend(&mut self, iter: I) {
                 self.extend_desugared(iter.into_iter());
             }
@@ -1721,7 +1721,7 @@ cfg_if! {
     }
 }
 
-impl<T: LookupKey<O>, O: TotalOrder> BinaryHeap<T, O> {
+impl<T: SortableBy<O>, O: TotalOrder> BinaryHeap<T, O> {
     fn extend_desugared<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         let iterator = iter.into_iter();
         let (lower, _) = iterator.size_hint();
@@ -1732,7 +1732,7 @@ impl<T: LookupKey<O>, O: TotalOrder> BinaryHeap<T, O> {
     }
 }
 
-impl<'a, T: 'a + LookupKey<O> + Copy, O: TotalOrder> Extend<&'a T> for BinaryHeap<T, O> {
+impl<'a, T: 'a + SortableBy<O> + Copy, O: TotalOrder> Extend<&'a T> for BinaryHeap<T, O> {
     fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
         self.extend(iter.into_iter().cloned());
     }
