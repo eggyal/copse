@@ -102,7 +102,7 @@ impl<K: OrdStoredKey, V> BTreeMap<K, V> {
         if let Some(mut previous) = keys.next() {
             for next in keys {
                 assert!(
-                    self.order.lt(previous.sort_key(), next.sort_key()),
+                    self.order.lt(previous, next),
                     "{:?} >= {:?}",
                     previous.sort_key(),
                     next.sort_key()

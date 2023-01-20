@@ -45,24 +45,48 @@ impl<T: ?Sized + Ord> TotalOrder for OrdTotalOrder<T> {
     // in `liballoc::collections::binary_heap::tests::panic_safe`), thus enabling
     // copse to imitate liballoc with greater fidelity.
 
-    fn eq(&self, this: &T, that: &T) -> bool {
-        this == that
+    fn eq<A, B>(&self, this: &A, that: &B) -> bool
+    where
+        A: ?Sized + SortableBy<Self>,
+        B: ?Sized + SortableBy<Self>,
+    {
+        this.sort_key() == that.sort_key()
     }
-    fn ne(&self, this: &T, that: &T) -> bool {
-        this != that
+    fn ne<A, B>(&self, this: &A, that: &B) -> bool
+    where
+        A: ?Sized + SortableBy<Self>,
+        B: ?Sized + SortableBy<Self>,
+    {
+        this.sort_key() != that.sort_key()
     }
 
-    fn ge(&self, this: &T, that: &T) -> bool {
-        this >= that
+    fn ge<A, B>(&self, this: &A, that: &B) -> bool
+    where
+        A: ?Sized + SortableBy<Self>,
+        B: ?Sized + SortableBy<Self>,
+    {
+        this.sort_key() >= that.sort_key()
     }
-    fn gt(&self, this: &T, that: &T) -> bool {
-        this > that
+    fn gt<A, B>(&self, this: &A, that: &B) -> bool
+    where
+        A: ?Sized + SortableBy<Self>,
+        B: ?Sized + SortableBy<Self>,
+    {
+        this.sort_key() > that.sort_key()
     }
-    fn le(&self, this: &T, that: &T) -> bool {
-        this <= that
+    fn le<A, B>(&self, this: &A, that: &B) -> bool
+    where
+        A: ?Sized + SortableBy<Self>,
+        B: ?Sized + SortableBy<Self>,
+    {
+        this.sort_key() <= that.sort_key()
     }
-    fn lt(&self, this: &T, that: &T) -> bool {
-        this < that
+    fn lt<A, B>(&self, this: &A, that: &B) -> bool
+    where
+        A: ?Sized + SortableBy<Self>,
+        B: ?Sized + SortableBy<Self>,
+    {
+        this.sort_key() < that.sort_key()
     }
 }
 

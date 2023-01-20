@@ -611,7 +611,7 @@ impl<T: SortableBy<O>, O: TotalOrder> BinaryHeap<T, O> {
             //  and so hole.pos() - 1 can't underflow.
             //  This guarantees that parent < hole.pos() so
             //  it's a valid index and also != hole.pos().
-            if self.order.le(hole.element().sort_key(), unsafe { hole.get(parent) }.sort_key()) {
+            if self.order.le(hole.element(), unsafe { hole.get(parent) }) {
                 break;
             }
 
@@ -642,14 +642,12 @@ impl<T: SortableBy<O>, O: TotalOrder> BinaryHeap<T, O> {
             //  child + 1 == 2 * hole.pos() + 2 != hole.pos().
             // FIXME: 2 * hole.pos() + 1 or 2 * hole.pos() + 2 could overflow
             //  if T is a ZST
-            child += unsafe {
-                self.order.le(hole.get(child).sort_key(), hole.get(child + 1).sort_key())
-            } as usize;
+            child += unsafe { self.order.le(hole.get(child), hole.get(child + 1)) } as usize;
 
             // if we are already in order, stop.
             // SAFETY: child is now either the old child or the old child+1
             //  We already proven that both are < self.len() and != hole.pos()
-            if self.order.ge(hole.element().sort_key(), unsafe { hole.get(child) }.sort_key()) {
+            if self.order.ge(hole.element(), unsafe { hole.get(child) }) {
                 return;
             }
 
@@ -660,9 +658,7 @@ impl<T: SortableBy<O>, O: TotalOrder> BinaryHeap<T, O> {
 
         // SAFETY: && short circuit, which means that in the
         //  second condition it's already true that child == end - 1 < self.len().
-        if child == end - 1
-            && self.order.lt(hole.element().sort_key(), unsafe { hole.get(child) }.sort_key())
-        {
+        if child == end - 1 && self.order.lt(hole.element(), unsafe { hole.get(child) }) {
             // SAFETY: child is already proven to be a valid index and
             //  child == 2 * hole.pos() + 1 != hole.pos().
             unsafe { hole.move_to(child) };
@@ -704,9 +700,7 @@ impl<T: SortableBy<O>, O: TotalOrder> BinaryHeap<T, O> {
             //  child + 1 == 2 * hole.pos() + 2 != hole.pos().
             // FIXME: 2 * hole.pos() + 1 or 2 * hole.pos() + 2 could overflow
             //  if T is a ZST
-            child += unsafe {
-                self.order.le(hole.get(child).sort_key(), hole.get(child + 1).sort_key())
-            } as usize;
+            child += unsafe { self.order.le(hole.get(child), hole.get(child + 1)) } as usize;
 
             // SAFETY: Same as above
             unsafe { hole.move_to(child) };

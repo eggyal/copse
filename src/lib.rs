@@ -71,21 +71,44 @@ pub trait TotalOrder {
     /// the expression `this <operator> that` if true.
     fn cmp(&self, this: &Self::OrderedType, that: &Self::OrderedType) -> Ordering;
 
+    /// This method returns the [`Ordering`] between `this` and `that` under
+    /// this total order.
+    ///
+    /// By convention, `self.cmp(&this, &that)` returns the ordering matching
+    /// the expression `this <operator> that` if true.
+    #[doc(hidden)]
+    #[inline]
+    fn cmp_any<A, B>(&self, this: &A, that: &B) -> Ordering
+    where
+        A: ?Sized + SortableBy<Self>,
+        B: ?Sized + SortableBy<Self>,
+    {
+        self.cmp(this.sort_key(), that.sort_key())
+    }
+
     /// Tests whether `this == that` under this total order.  It is a logic
     /// error for this method to be inconsistent with [`TotalOrder::cmp`],
     /// and therefore the default implementation should rarely be overriden.
     #[doc(hidden)]
     #[inline]
-    fn eq(&self, this: &Self::OrderedType, that: &Self::OrderedType) -> bool {
-        self.cmp(this, that).is_eq()
+    fn eq<A, B>(&self, this: &A, that: &B) -> bool
+    where
+        A: ?Sized + SortableBy<Self>,
+        B: ?Sized + SortableBy<Self>,
+    {
+        self.cmp_any(this, that).is_eq()
     }
     /// Tests whether `this != that` under this total order.  It is a logic
     /// error for this method to be inconsistent with [`TotalOrder::cmp`],
     /// and therefore the default implementation should rarely be overriden.
     #[doc(hidden)]
     #[inline]
-    fn ne(&self, this: &Self::OrderedType, that: &Self::OrderedType) -> bool {
-        self.cmp(this, that).is_ne()
+    fn ne<A, B>(&self, this: &A, that: &B) -> bool
+    where
+        A: ?Sized + SortableBy<Self>,
+        B: ?Sized + SortableBy<Self>,
+    {
+        self.cmp_any(this, that).is_ne()
     }
 
     /// Tests whether `this >= that` under this total order.  It is a logic
@@ -93,32 +116,48 @@ pub trait TotalOrder {
     /// and therefore the default implementation should rarely be overriden.
     #[doc(hidden)]
     #[inline]
-    fn ge(&self, this: &Self::OrderedType, that: &Self::OrderedType) -> bool {
-        self.cmp(this, that).is_ge()
+    fn ge<A, B>(&self, this: &A, that: &B) -> bool
+    where
+        A: ?Sized + SortableBy<Self>,
+        B: ?Sized + SortableBy<Self>,
+    {
+        self.cmp_any(this, that).is_ge()
     }
     /// Tests whether `this > that` under this total order.  It is a logic
     /// error for this method to be inconsistent with [`TotalOrder::cmp`],
     /// and therefore the default implementation should rarely be overriden.
     #[doc(hidden)]
     #[inline]
-    fn gt(&self, this: &Self::OrderedType, that: &Self::OrderedType) -> bool {
-        self.cmp(this, that).is_gt()
+    fn gt<A, B>(&self, this: &A, that: &B) -> bool
+    where
+        A: ?Sized + SortableBy<Self>,
+        B: ?Sized + SortableBy<Self>,
+    {
+        self.cmp_any(this, that).is_gt()
     }
     /// Tests whether `this <= that` under this total order.  It is a logic
     /// error for this method to be inconsistent with [`TotalOrder::cmp`],
     /// and therefore the default implementation should rarely be overriden.
     #[doc(hidden)]
     #[inline]
-    fn le(&self, this: &Self::OrderedType, that: &Self::OrderedType) -> bool {
-        self.cmp(this, that).is_le()
+    fn le<A, B>(&self, this: &A, that: &B) -> bool
+    where
+        A: ?Sized + SortableBy<Self>,
+        B: ?Sized + SortableBy<Self>,
+    {
+        self.cmp_any(this, that).is_le()
     }
     /// Tests whether `this < that` under this total order.  It is a logic
     /// error for this method to be inconsistent with [`TotalOrder::cmp`],
     /// and therefore the default implementation should rarely be overriden.
     #[doc(hidden)]
     #[inline]
-    fn lt(&self, this: &Self::OrderedType, that: &Self::OrderedType) -> bool {
-        self.cmp(this, that).is_lt()
+    fn lt<A, B>(&self, this: &A, that: &B) -> bool
+    where
+        A: ?Sized + SortableBy<Self>,
+        B: ?Sized + SortableBy<Self>,
+    {
+        self.cmp_any(this, that).is_lt()
     }
 }
 

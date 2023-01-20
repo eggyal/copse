@@ -1190,7 +1190,7 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
             self_iter,
             other_iter,
             &mut self.length,
-            |a: &(K, V), b: &(K, V)| self.order.cmp(a.0.sort_key(), b.0.sort_key()),
+            |a: &(K, V), b: &(K, V)| self.order.cmp_any(&a.0, &b.0),
             (*self.alloc).clone(),
         )
     }
@@ -2124,7 +2124,7 @@ impl<K: SortableBy<O>, V, O: TotalOrder + Default> FromIterator<(K, V)> for BTre
 
         // use stable sort to preserve the insertion order.
         let order = O::default();
-        inputs.sort_by(|a, b| order.cmp(a.0.sort_key(), b.0.sort_key()));
+        inputs.sort_by(|a, b| order.cmp_any(&a.0, &b.0));
         BTreeMap::bulk_build_from_sorted_iter(inputs, order, Global)
     }
 }
@@ -2242,7 +2242,7 @@ impl<K: SortableBy<O>, V, O: TotalOrder + Default, const N: usize> From<[(K, V);
 
         // use stable sort to preserve the insertion order.
         let order = O::default();
-        arr.sort_by(|a, b| order.cmp(a.0.sort_key(), b.0.sort_key()));
+        arr.sort_by(|a, b| order.cmp_any(&a.0, &b.0));
         BTreeMap::bulk_build_from_sorted_iter(arr, order, Global)
     }
 }
