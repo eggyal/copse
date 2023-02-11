@@ -228,11 +228,10 @@ impl<T: fmt::Debug, O: TotalOrder, A: Allocator + Clone> fmt::Debug for Differen
 /// [`symmetric_difference`]: BTreeSet::symmetric_difference
 #[must_use = "this returns the difference as an iterator, \
               without modifying either input set"]
-pub struct SymmetricDifference<
-    'a,
-    T: 'a,
-    O = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>,
->(MergeIterInner<Iter<'a, T>>, &'a O);
+pub struct SymmetricDifference<'a, T: 'a, O = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>>(
+    MergeIterInner<Iter<'a, T>>,
+    &'a O,
+);
 
 impl<T: fmt::Debug, O> fmt::Debug for SymmetricDifference<'_, T, O> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

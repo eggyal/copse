@@ -52,6 +52,7 @@ binary_heap_as_slice = []
 binary_heap_drain_sorted = []
 binary_heap_into_iter_sorted = []
 binary_heap_retain = []
+btree_cursors = []
 btree_drain_filter = []
 const_btree_len = []
 const_btree_new = ["const_btree_len"]
@@ -61,6 +62,7 @@ unstable = [
     "binary_heap_drain_sorted",
     "binary_heap_into_iter_sorted",
     "binary_heap_retain",
+    "btree_cursors",
     "btree_drain_filter",
     "const_btree_new",
     "map_try_insert",
