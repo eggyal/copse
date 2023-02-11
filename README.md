@@ -21,6 +21,9 @@ can be extracted.
 
 # Example
 ```rust
+use copse::{BTreeSet, SortableBy, TotalOrder};
+use std::cmp::Ordering;
+
 // define a total order
 struct OrderByNthByte {
     n: usize, // runtime state

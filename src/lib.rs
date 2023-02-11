@@ -176,7 +176,7 @@ pub trait TotalOrder {
 /// ```rust
 /// use copse::{BTreeSet, SortableBy, TotalOrder};
 /// use std::cmp::Ordering;
-/// 
+///
 /// struct MyOrdering;
 ///
 /// impl TotalOrder for MyOrdering {
@@ -188,7 +188,7 @@ pub trait TotalOrder {
 ///     fn sort_key(&self) -> &str { self.as_str() }
 /// }
 /// impl SortableBy<MyOrdering> for str {
-///     fn sort_by(&self) -> &str { self }
+///     fn sort_key(&self) -> &str { self }
 /// }
 ///
 /// let mut set = BTreeSet::new(MyOrdering);
