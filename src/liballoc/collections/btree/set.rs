@@ -340,12 +340,7 @@ impl<T, O> BTreeSet<T, O> {
     ///     // etc
     /// #     type OrderedType = [u8];
     /// #     fn cmp(&self, this: &[u8], that: &[u8]) -> Ordering {
-    /// #         match (this.get(self.n), that.get(self.n)) {
-    /// #             (Some(lhs), Some(rhs)) => lhs.cmp(rhs),
-    /// #             (Some(_), None) => Ordering::Greater,
-    /// #             (None, Some(_)) => Ordering::Less,
-    /// #             (None, None) => Ordering::Equal,
-    /// #         }
+    /// #         this.get(self.n).cmp(&that.get(self.n))
     /// #     }
     /// }
     ///
