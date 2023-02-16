@@ -1,4 +1,4 @@
-use crate::{SortableBy, TotalOrder};
+use crate::{SortableByWithOrder, TotalOrder};
 use core::hint;
 use core::ops::RangeBounds;
 use core::ptr;
@@ -256,8 +256,8 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
         range: R,
     ) -> LeafRange<BorrowType, K, V>
     where
-        K: SortableBy<O>,
-        Q: SortableBy<O>,
+        K: SortableByWithOrder<O>,
+        Q: SortableByWithOrder<O>,
         R: RangeBounds<Q>,
         O: TotalOrder,
     {
@@ -306,8 +306,8 @@ impl<'a, K: 'a, V: 'a> NodeRef<marker::Immut<'a>, K, V, marker::LeafOrInternal> 
     /// in a `BTreeMap` is.
     pub fn range_search<Q, R, O>(self, order: &O, range: R) -> LeafRange<marker::Immut<'a>, K, V>
     where
-        K: SortableBy<O>,
-        Q: ?Sized + SortableBy<O>,
+        K: SortableByWithOrder<O>,
+        Q: ?Sized + SortableByWithOrder<O>,
         R: RangeBounds<Q>,
         O: TotalOrder,
     {
@@ -333,8 +333,8 @@ impl<'a, K: 'a, V: 'a> NodeRef<marker::ValMut<'a>, K, V, marker::LeafOrInternal>
     /// Do not use the duplicate handles to visit the same KV twice.
     pub fn range_search<Q, R, O>(self, order: &O, range: R) -> LeafRange<marker::ValMut<'a>, K, V>
     where
-        K: SortableBy<O>,
-        Q: ?Sized + SortableBy<O>,
+        K: SortableByWithOrder<O>,
+        Q: ?Sized + SortableByWithOrder<O>,
         R: RangeBounds<Q>,
         O: TotalOrder,
     {
@@ -735,8 +735,8 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
         mut bound: SearchBound<&Q>,
     ) -> Handle<NodeRef<BorrowType, K, V, marker::Leaf>, marker::Edge>
     where
-        K: SortableBy<O>,
-        Q: SortableBy<O>,
+        K: SortableByWithOrder<O>,
+        Q: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         let mut node = self;
@@ -760,8 +760,8 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
         mut bound: SearchBound<&Q>,
     ) -> Handle<NodeRef<BorrowType, K, V, marker::Leaf>, marker::Edge>
     where
-        K: SortableBy<O>,
-        Q: SortableBy<O>,
+        K: SortableByWithOrder<O>,
+        Q: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         let mut node = self;

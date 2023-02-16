@@ -1,7 +1,7 @@
 use super::node::{ForceResult::*, Root};
 use super::search::SearchResult::*;
 use crate::polyfill::*;
-use crate::{SortableBy, TotalOrder};
+use crate::{SortableByWithOrder, TotalOrder};
 
 impl<K, V> Root<K, V> {
     /// Calculates the length of both trees that result from splitting up
@@ -36,8 +36,8 @@ impl<K, V> Root<K, V> {
         alloc: A,
     ) -> Self
     where
-        K: SortableBy<O>,
-        Q: SortableBy<O>,
+        K: SortableByWithOrder<O>,
+        Q: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         let left_root = self;

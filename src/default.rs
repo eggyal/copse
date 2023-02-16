@@ -5,7 +5,7 @@
 //! Use of these defaults negates the purpose of the copse crate, and indicates that
 //! you should probably be using the standard library's collections instead.
 
-use crate::{SortableBy, TotalOrder};
+use crate::{SortableBy, SortableByWithOrder, TotalOrder};
 use alloc::{boxed::Box, vec::Vec};
 use core::{borrow::Borrow, cmp::Ordering, marker::PhantomData};
 
@@ -47,46 +47,46 @@ impl<T: ?Sized + Ord> TotalOrder for OrdTotalOrder<T> {
 
     fn eq<A, B>(&self, this: &A, that: &B) -> bool
     where
-        A: ?Sized + SortableBy<Self>,
-        B: ?Sized + SortableBy<Self>,
+        A: ?Sized + SortableByWithOrder<Self>,
+        B: ?Sized + SortableByWithOrder<Self>,
     {
-        this.sort_key() == that.sort_key()
+        this.sort_key_with_order(self) == that.sort_key_with_order(self)
     }
     fn ne<A, B>(&self, this: &A, that: &B) -> bool
     where
-        A: ?Sized + SortableBy<Self>,
-        B: ?Sized + SortableBy<Self>,
+        A: ?Sized + SortableByWithOrder<Self>,
+        B: ?Sized + SortableByWithOrder<Self>,
     {
-        this.sort_key() != that.sort_key()
+        this.sort_key_with_order(self) != that.sort_key_with_order(self)
     }
 
     fn ge<A, B>(&self, this: &A, that: &B) -> bool
     where
-        A: ?Sized + SortableBy<Self>,
-        B: ?Sized + SortableBy<Self>,
+        A: ?Sized + SortableByWithOrder<Self>,
+        B: ?Sized + SortableByWithOrder<Self>,
     {
-        this.sort_key() >= that.sort_key()
+        this.sort_key_with_order(self) >= that.sort_key_with_order(self)
     }
     fn gt<A, B>(&self, this: &A, that: &B) -> bool
     where
-        A: ?Sized + SortableBy<Self>,
-        B: ?Sized + SortableBy<Self>,
+        A: ?Sized + SortableByWithOrder<Self>,
+        B: ?Sized + SortableByWithOrder<Self>,
     {
-        this.sort_key() > that.sort_key()
+        this.sort_key_with_order(self) > that.sort_key_with_order(self)
     }
     fn le<A, B>(&self, this: &A, that: &B) -> bool
     where
-        A: ?Sized + SortableBy<Self>,
-        B: ?Sized + SortableBy<Self>,
+        A: ?Sized + SortableByWithOrder<Self>,
+        B: ?Sized + SortableByWithOrder<Self>,
     {
-        this.sort_key() <= that.sort_key()
+        this.sort_key_with_order(self) <= that.sort_key_with_order(self)
     }
     fn lt<A, B>(&self, this: &A, that: &B) -> bool
     where
-        A: ?Sized + SortableBy<Self>,
-        B: ?Sized + SortableBy<Self>,
+        A: ?Sized + SortableByWithOrder<Self>,
+        B: ?Sized + SortableByWithOrder<Self>,
     {
-        this.sort_key() < that.sort_key()
+        this.sort_key_with_order(self) < that.sort_key_with_order(self)
     }
 }
 

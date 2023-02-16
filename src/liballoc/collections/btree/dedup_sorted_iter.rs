@@ -1,6 +1,6 @@
 use core::iter::Peekable;
 
-use crate::{SortableBy, TotalOrder};
+use crate::{SortableByWithOrder, TotalOrder};
 
 /// A iterator for deduping the key of a sorted iterator.
 /// When encountering the duplicated key, only the last key-value pair is yielded.
@@ -27,7 +27,7 @@ where
 
 impl<K, V, O, I> Iterator for DedupSortedIter<'_, K, V, O, I>
 where
-    K: SortableBy<O>,
+    K: SortableByWithOrder<O>,
     O: TotalOrder,
     I: Iterator<Item = (K, V)>,
 {

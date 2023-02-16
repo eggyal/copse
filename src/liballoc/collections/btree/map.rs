@@ -12,7 +12,7 @@ use core::ptr;
 use crate::{
     default::{OrdStoredKey, OrdTotalOrder},
     polyfill::*,
-    SortableBy, TotalOrder,
+    SortableBy, SortableByWithOrder, TotalOrder,
 };
 
 use super::borrow::DormantMutRef;
@@ -311,8 +311,8 @@ impl<K: Clone, V: Clone, O: Clone, A: Allocator + Clone> Clone for BTreeMap<K, V
 
 impl<K, Q: ?Sized, O, A: Allocator + Clone> super::Recover<Q> for BTreeMap<K, SetValZST, O, A>
 where
-    K: SortableBy<O>,
-    Q: SortableBy<O>,
+    K: SortableByWithOrder<O>,
+    Q: SortableByWithOrder<O>,
     O: TotalOrder,
 {
     type Key = K;
@@ -693,8 +693,8 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     /// ```
     pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<&V>
     where
-        K: SortableBy<O>,
-        Q: SortableBy<O>,
+        K: SortableByWithOrder<O>,
+        Q: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         let root_node = self.root.as_ref()?.reborrow();
@@ -721,8 +721,8 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     /// ```
     pub fn get_key_value<Q: ?Sized>(&self, k: &Q) -> Option<(&K, &V)>
     where
-        K: SortableBy<O>,
-        Q: SortableBy<O>,
+        K: SortableByWithOrder<O>,
+        Q: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         let root_node = self.root.as_ref()?.reborrow();
@@ -750,7 +750,7 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     /// ```
     pub fn first_key_value(&self) -> Option<(&K, &V)>
     where
-        K: SortableBy<O>,
+        K: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         let root_node = self.root.as_ref()?.reborrow();
@@ -778,7 +778,7 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     /// ```
     pub fn first_entry(&mut self) -> Option<OccupiedEntry<'_, K, V, O, A>>
     where
-        K: SortableBy<O>,
+        K: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         let (map, dormant_map) = DormantMutRef::new(self);
@@ -812,7 +812,7 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     /// ```
     pub fn pop_first(&mut self) -> Option<(K, V)>
     where
-        K: SortableBy<O>,
+        K: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         self.first_entry().map(|entry| entry.remove_entry())
@@ -835,7 +835,7 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     /// ```
     pub fn last_key_value(&self) -> Option<(&K, &V)>
     where
-        K: SortableBy<O>,
+        K: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         let root_node = self.root.as_ref()?.reborrow();
@@ -863,7 +863,7 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     /// ```
     pub fn last_entry(&mut self) -> Option<OccupiedEntry<'_, K, V, O, A>>
     where
-        K: SortableBy<O>,
+        K: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         let (map, dormant_map) = DormantMutRef::new(self);
@@ -897,7 +897,7 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     /// ```
     pub fn pop_last(&mut self) -> Option<(K, V)>
     where
-        K: SortableBy<O>,
+        K: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         self.last_entry().map(|entry| entry.remove_entry())
@@ -922,8 +922,8 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     /// ```
     pub fn contains_key<Q: ?Sized>(&self, key: &Q) -> bool
     where
-        K: SortableBy<O>,
-        Q: SortableBy<O>,
+        K: SortableByWithOrder<O>,
+        Q: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         self.get(key).is_some()
@@ -951,8 +951,8 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     // See `get` for implementation notes, this is basically a copy-paste with mut's added
     pub fn get_mut<Q: ?Sized>(&mut self, key: &Q) -> Option<&mut V>
     where
-        K: SortableBy<O>,
-        Q: SortableBy<O>,
+        K: SortableByWithOrder<O>,
+        Q: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         let root_node = self.root.as_mut()?.borrow_mut();
@@ -990,7 +990,7 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     /// ```
     pub fn insert(&mut self, key: K, value: V) -> Option<V>
     where
-        K: SortableBy<O>,
+        K: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         match self.entry(key) {
@@ -1026,7 +1026,7 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     #[cfg(feature = "map_try_insert")]
     pub fn try_insert(&mut self, key: K, value: V) -> Result<&mut V, OccupiedError<'_, K, V, O, A>>
     where
-        K: SortableBy<O>,
+        K: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         match self.entry(key) {
@@ -1055,8 +1055,8 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     /// ```
     pub fn remove<Q: ?Sized>(&mut self, key: &Q) -> Option<V>
     where
-        K: SortableBy<O>,
-        Q: SortableBy<O>,
+        K: SortableByWithOrder<O>,
+        Q: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         self.remove_entry(key).map(|(_, v)| v)
@@ -1082,8 +1082,8 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     /// ```
     pub fn remove_entry<Q: ?Sized>(&mut self, key: &Q) -> Option<(K, V)>
     where
-        K: SortableBy<O>,
-        Q: SortableBy<O>,
+        K: SortableByWithOrder<O>,
+        Q: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         let (map, dormant_map) = DormantMutRef::new(self);
@@ -1120,7 +1120,7 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     #[inline]
     pub fn retain<F>(&mut self, mut f: F)
     where
-        K: SortableBy<O>,
+        K: SortableByWithOrder<O>,
         O: TotalOrder,
         F: FnMut(&K, &mut V) -> bool,
     {
@@ -1160,7 +1160,7 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     /// ```
     pub fn append(&mut self, other: &mut Self)
     where
-        K: SortableBy<O>,
+        K: SortableByWithOrder<O>,
         O: Clone + TotalOrder,
         A: Clone,
     {
@@ -1221,8 +1221,8 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     /// ```
     pub fn range<T: ?Sized, R>(&self, range: R) -> Range<'_, K, V>
     where
-        T: SortableBy<O>,
-        K: SortableBy<O>,
+        T: SortableByWithOrder<O>,
+        K: SortableByWithOrder<O>,
         O: TotalOrder,
         R: RangeBounds<T>,
     {
@@ -1263,8 +1263,8 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     /// ```
     pub fn range_mut<T: ?Sized, R>(&mut self, range: R) -> RangeMut<'_, K, V>
     where
-        T: SortableBy<O>,
-        K: SortableBy<O>,
+        T: SortableByWithOrder<O>,
+        K: SortableByWithOrder<O>,
         O: TotalOrder,
         R: RangeBounds<T>,
     {
@@ -1300,7 +1300,7 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     /// ```
     pub fn entry(&mut self, key: K) -> Entry<'_, K, V, O, A>
     where
-        K: SortableBy<O>,
+        K: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         let (map, dormant_map) = DormantMutRef::new(self);
@@ -1361,8 +1361,8 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     /// ```
     pub fn split_off<Q: ?Sized>(&mut self, key: &Q) -> Self
     where
-        K: SortableBy<O>,
-        Q: SortableBy<O>,
+        K: SortableByWithOrder<O>,
+        Q: SortableByWithOrder<O>,
         O: Clone + TotalOrder,
         A: Clone,
     {
@@ -1424,7 +1424,7 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
         }
         fn drain_filter<F>(&mut self, pred: F) -> DrainFilter<'_, K, V, F, A>
         where
-            K: SortableBy<O>,
+            K: SortableByWithOrder<O>,
             O: TotalOrder,
             F: FnMut(&K, &mut V) -> bool,
         {
@@ -1435,7 +1435,7 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
 
     pub(super) fn drain_filter_inner(&mut self) -> (DrainFilterInner<'_, K, V>, A)
     where
-        K: SortableBy<O>,
+        K: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         if let Some(root) = self.root.as_mut() {
@@ -1510,7 +1510,7 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
         alloc: A,
     ) -> BTreeMap<K, V, O, A>
     where
-        K: SortableBy<O>,
+        K: SortableByWithOrder<O>,
         O: TotalOrder,
         I: IntoIterator<Item = (K, V)>,
     {
@@ -2109,7 +2109,9 @@ impl<'a, K, V> DoubleEndedIterator for RangeMut<'a, K, V> {
 
 impl<K, V> FusedIterator for RangeMut<'_, K, V> {}
 
-impl<K: SortableBy<O>, V, O: TotalOrder + Default> FromIterator<(K, V)> for BTreeMap<K, V, O> {
+impl<K: SortableByWithOrder<O>, V, O: TotalOrder + Default> FromIterator<(K, V)>
+    for BTreeMap<K, V, O>
+{
     fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> BTreeMap<K, V, O> {
         let mut inputs: Vec<_> = iter.into_iter().collect();
 
@@ -2124,7 +2126,7 @@ impl<K: SortableBy<O>, V, O: TotalOrder + Default> FromIterator<(K, V)> for BTre
     }
 }
 
-impl<K: SortableBy<O>, V, O: TotalOrder, A: Allocator + Clone> Extend<(K, V)>
+impl<K: SortableByWithOrder<O>, V, O: TotalOrder, A: Allocator + Clone> Extend<(K, V)>
     for BTreeMap<K, V, O, A>
 {
     #[inline]
@@ -2141,7 +2143,7 @@ impl<K: SortableBy<O>, V, O: TotalOrder, A: Allocator + Clone> Extend<(K, V)>
     }
 }
 
-impl<'a, K: SortableBy<O> + Copy, V: Copy, O: TotalOrder, A: Allocator + Clone>
+impl<'a, K: SortableByWithOrder<O> + Copy, V: Copy, O: TotalOrder, A: Allocator + Clone>
     Extend<(&'a K, &'a V)> for BTreeMap<K, V, O, A>
 {
     fn extend<I: IntoIterator<Item = (&'a K, &'a V)>>(&mut self, iter: I) {
@@ -2201,8 +2203,8 @@ impl<K: Debug, V: Debug, O, A: Allocator + Clone> Debug for BTreeMap<K, V, O, A>
 
 impl<K, Q: ?Sized, V, O, A: Allocator + Clone> Index<&Q> for BTreeMap<K, V, O, A>
 where
-    K: SortableBy<O>,
-    Q: SortableBy<O>,
+    K: SortableByWithOrder<O>,
+    Q: SortableByWithOrder<O>,
     O: TotalOrder,
 {
     type Output = V;
@@ -2218,7 +2220,7 @@ where
     }
 }
 
-impl<K: SortableBy<O>, V, O: TotalOrder + Default, const N: usize> From<[(K, V); N]>
+impl<K: SortableByWithOrder<O>, V, O: TotalOrder + Default, const N: usize> From<[(K, V); N]>
     for BTreeMap<K, V, O>
 {
     /// Converts a `[(K, V); N]` into a `BTreeMap<(K, V)>`.
@@ -2445,8 +2447,8 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     #[cfg(feature = "btree_cursors")]
     pub fn lower_bound<Q>(&self, bound: Bound<&Q>) -> Cursor<'_, K, V>
     where
-        K: SortableBy<O>,
-        Q: SortableBy<O>,
+        K: SortableByWithOrder<O>,
+        Q: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         let root_node = match self.root.as_ref() {
@@ -2485,8 +2487,8 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     #[cfg(feature = "btree_cursors")]
     pub fn lower_bound_mut<Q>(&mut self, bound: Bound<&Q>) -> CursorMut<'_, K, V, A>
     where
-        K: SortableBy<O>,
-        Q: SortableBy<O>,
+        K: SortableByWithOrder<O>,
+        Q: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         let (root, dormant_root) = DormantMutRef::new(&mut self.root);
@@ -2538,8 +2540,8 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     #[cfg(feature = "btree_cursors")]
     pub fn upper_bound<Q>(&self, bound: Bound<&Q>) -> Cursor<'_, K, V>
     where
-        K: SortableBy<O>,
-        Q: SortableBy<O>,
+        K: SortableByWithOrder<O>,
+        Q: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         let root_node = match self.root.as_ref() {
@@ -2578,8 +2580,8 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
     #[cfg(feature = "btree_cursors")]
     pub fn upper_bound_mut<Q>(&mut self, bound: Bound<&Q>) -> CursorMut<'_, K, V, A>
     where
-        K: SortableBy<O>,
-        Q: SortableBy<O>,
+        K: SortableByWithOrder<O>,
+        Q: SortableByWithOrder<O>,
         O: TotalOrder,
     {
         let (root, dormant_root) = DormantMutRef::new(&mut self.root);

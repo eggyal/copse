@@ -80,10 +80,10 @@ pub trait TotalOrder {
     #[inline]
     fn cmp_any<A, B>(&self, this: &A, that: &B) -> Ordering
     where
-        A: ?Sized + SortableBy<Self>,
-        B: ?Sized + SortableBy<Self>,
+        A: ?Sized + SortableByWithOrder<Self>,
+        B: ?Sized + SortableByWithOrder<Self>,
     {
-        self.cmp(this.sort_key(), that.sort_key())
+        self.cmp(this.sort_key_with_order(self), that.sort_key_with_order(self))
     }
 
     /// Tests whether `this == that` under this total order.  It is a logic
@@ -93,8 +93,8 @@ pub trait TotalOrder {
     #[inline]
     fn eq<A, B>(&self, this: &A, that: &B) -> bool
     where
-        A: ?Sized + SortableBy<Self>,
-        B: ?Sized + SortableBy<Self>,
+        A: ?Sized + SortableByWithOrder<Self>,
+        B: ?Sized + SortableByWithOrder<Self>,
     {
         self.cmp_any(this, that).is_eq()
     }
@@ -105,8 +105,8 @@ pub trait TotalOrder {
     #[inline]
     fn ne<A, B>(&self, this: &A, that: &B) -> bool
     where
-        A: ?Sized + SortableBy<Self>,
-        B: ?Sized + SortableBy<Self>,
+        A: ?Sized + SortableByWithOrder<Self>,
+        B: ?Sized + SortableByWithOrder<Self>,
     {
         self.cmp_any(this, that).is_ne()
     }
@@ -118,8 +118,8 @@ pub trait TotalOrder {
     #[inline]
     fn ge<A, B>(&self, this: &A, that: &B) -> bool
     where
-        A: ?Sized + SortableBy<Self>,
-        B: ?Sized + SortableBy<Self>,
+        A: ?Sized + SortableByWithOrder<Self>,
+        B: ?Sized + SortableByWithOrder<Self>,
     {
         self.cmp_any(this, that).is_ge()
     }
@@ -130,8 +130,8 @@ pub trait TotalOrder {
     #[inline]
     fn gt<A, B>(&self, this: &A, that: &B) -> bool
     where
-        A: ?Sized + SortableBy<Self>,
-        B: ?Sized + SortableBy<Self>,
+        A: ?Sized + SortableByWithOrder<Self>,
+        B: ?Sized + SortableByWithOrder<Self>,
     {
         self.cmp_any(this, that).is_gt()
     }
@@ -142,8 +142,8 @@ pub trait TotalOrder {
     #[inline]
     fn le<A, B>(&self, this: &A, that: &B) -> bool
     where
-        A: ?Sized + SortableBy<Self>,
-        B: ?Sized + SortableBy<Self>,
+        A: ?Sized + SortableByWithOrder<Self>,
+        B: ?Sized + SortableByWithOrder<Self>,
     {
         self.cmp_any(this, that).is_le()
     }
@@ -154,8 +154,8 @@ pub trait TotalOrder {
     #[inline]
     fn lt<A, B>(&self, this: &A, that: &B) -> bool
     where
-        A: ?Sized + SortableBy<Self>,
-        B: ?Sized + SortableBy<Self>,
+        A: ?Sized + SortableByWithOrder<Self>,
+        B: ?Sized + SortableByWithOrder<Self>,
     {
         self.cmp_any(this, that).is_lt()
     }
@@ -202,4 +202,19 @@ pub trait TotalOrder {
 pub trait SortableBy<O: ?Sized + TotalOrder> {
     /// Extract the sort key by which `self` is ordered under total orders of type `O`.
     fn sort_key(&self) -> &O::OrderedType;
+}
+
+#[doc(hidden)]
+pub trait SortableByWithOrder<O: ?Sized + TotalOrder> {
+    fn sort_key_with_order(&self, order: &O) -> &O::OrderedType;
+}
+
+impl<S, O> SortableByWithOrder<O> for S
+where
+    S: ?Sized + SortableBy<O>,
+    O: ?Sized + TotalOrder,
+{
+    fn sort_key_with_order(&self, _: &O) -> &<O as TotalOrder>::OrderedType {
+        self.sort_key()
+    }
 }
