@@ -1658,6 +1658,7 @@ impl<T, O> IntoIterator for BinaryHeap<T, O> {
             if #[cfg(not(feature = "inplace_iteration"))] {
                 IntoIter { iter }
             } else {
+                #[allow(clippy::let_and_return)]
                 iter
             }
         }
