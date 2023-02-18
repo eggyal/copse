@@ -206,7 +206,7 @@ pub trait SortableBy<O: ?Sized + TotalOrder> {
 
 #[doc(hidden)]
 pub trait SortableByWithOrder<O: ?Sized + TotalOrder> {
-    fn sort_key_with_order(&self, order: &O) -> &O::OrderedType;
+    fn sort_key_with_order<'a>(&'a self, order: &'a O) -> &'a O::OrderedType;
 }
 
 impl<S, O> SortableByWithOrder<O> for S
