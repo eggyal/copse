@@ -850,18 +850,30 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
     where
         F: FnMut(&T) -> bool,
     {
-        let mut first_removed = self.len();
+        struct RebuildOnDrop<'a, T: SortableByWithOrder<O>, O: TotalOrder> {
+            heap: &'a mut BinaryHeap<T, O>,
+            first_removed: usize,
+        }
+
+        let mut guard = RebuildOnDrop { first_removed: self.len(), heap: self };
+
         let mut i = 0;
-        self.data.retain(|e| {
+        guard.heap.data.retain(|e| {
             let keep = f(e);
-            if !keep && i < first_removed {
-                first_removed = i;
+            if !keep && i < guard.first_removed {
+                guard.first_removed = i;
             }
             i += 1;
             keep
         });
-        // data[0..first_removed] is untouched, so we only need to rebuild the tail:
-        self.rebuild_tail(first_removed);
+
+        impl<'a, T: SortableByWithOrder<O>, O: TotalOrder> Drop for RebuildOnDrop<'a, T, O> {
+            fn drop(&mut self) {
+                // data[..first_removed] is untouched, so we only need to
+                // rebuild the tail:
+                self.heap.rebuild_tail(self.first_removed);
+            }
+        }
     }
 }
 
