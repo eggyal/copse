@@ -219,6 +219,10 @@ impl<K, V> NodeRef<marker::Owned, K, V, marker::Leaf> {
         Self::from_new_leaf::<A>(LeafNode::new(alloc))
     }
 
+    #[rustversion::attr(
+        since(1.69),
+        cfg_attr(not(allocator_api), allow(clippy::extra_unused_type_parameters))
+    )]
     fn from_new_leaf<A: Allocator + Clone>(leaf: A!(Box<LeafNode<K, V>, A>)) -> Self {
         NodeRef { height: 0, node: NonNull::from(Box::leak(leaf)), _marker: PhantomData }
     }
@@ -233,6 +237,10 @@ impl<K, V> NodeRef<marker::Owned, K, V, marker::Internal> {
 
     /// # Safety
     /// `height` must not be zero.
+    #[rustversion::attr(
+        since(1.69),
+        cfg_attr(not(allocator_api), allow(clippy::extra_unused_type_parameters))
+    )]
     unsafe fn from_new_internal<A: Allocator + Clone>(
         internal: A!(Box<InternalNode<K, V>, A>),
         height: usize,
