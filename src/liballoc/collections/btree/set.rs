@@ -14,7 +14,7 @@ use core::iter::{FromIterator, FusedIterator, Peekable};
 use core::mem::ManuallyDrop;
 use core::ops::{BitAnd, BitOr, BitXor, RangeBounds, Sub};
 
-use super::map::{BTreeMap, Keys};
+use super::map::{BTreeMap, Keys, OrderMut};
 use super::merge_iter::MergeIterInner;
 use super::set_val::SetValZST;
 use super::Recover;
@@ -1264,6 +1264,21 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder, A: Allocator + Clone> BTreeSet<T,
         let iter = iter.map(|k| (k, SetValZST::default()));
         let map = BTreeMap::bulk_build_from_sorted_iter(iter, order, alloc);
         BTreeSet { map }
+    }
+
+    #[doc(hidden)]
+    pub fn get_order(&self) -> &O {
+        self.map.get_order()
+    }
+
+    #[doc(hidden)]
+    pub fn get_mut_order(&mut self) -> OrderMut<'_, T, SetValZST, O, A> {
+        self.map.get_mut_order()
+    }
+
+    #[doc(hidden)]
+    pub fn get_mut_order_unchecked(&mut self) -> &mut O {
+        self.map.get_mut_order_unchecked()
     }
 }
 

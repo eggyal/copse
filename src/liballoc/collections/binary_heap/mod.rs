@@ -875,6 +875,43 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
             }
         }
     }
+
+    #[doc(hidden)]
+    pub fn get_order(&self) -> &O {
+        &self.order
+    }
+
+    #[doc(hidden)]
+    pub fn get_mut_order(&mut self) -> OrderMut<'_, T, O> {
+        OrderMut(self)
+    }
+
+    #[doc(hidden)]
+    pub fn get_mut_order_unchecked(&mut self) -> &mut O {
+        &mut self.order
+    }
+}
+
+#[doc(hidden)]
+pub struct OrderMut<'a, T: SortableByWithOrder<O>, O: TotalOrder>(&'a mut BinaryHeap<T, O>);
+
+impl<T: SortableByWithOrder<O>, O: TotalOrder> Deref for OrderMut<'_, T, O> {
+    type Target = O;
+    fn deref(&self) -> &Self::Target {
+        &self.0.order
+    }
+}
+
+impl<T: SortableByWithOrder<O>, O: TotalOrder> DerefMut for OrderMut<'_, T, O> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0.order
+    }
+}
+
+impl<T: SortableByWithOrder<O>, O: TotalOrder> Drop for OrderMut<'_, T, O> {
+    fn drop(&mut self) {
+        self.0.rebuild()
+    }
 }
 
 impl<T, O> BinaryHeap<T, O> {

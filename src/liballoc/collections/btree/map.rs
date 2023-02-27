@@ -6,7 +6,7 @@ use core::hash::{Hash, Hasher};
 use core::iter::{FromIterator, FusedIterator};
 use core::marker::PhantomData;
 use core::mem::{self, ManuallyDrop};
-use core::ops::{Bound, Index, RangeBounds};
+use core::ops::{Bound, Deref, DerefMut, Index, RangeBounds};
 use core::ptr;
 
 use crate::{
@@ -1523,6 +1523,62 @@ impl<K, V, O, A: Allocator + Clone> BTreeMap<K, V, O, A> {
             order,
             alloc: ManuallyDrop::new(alloc),
             _marker: PhantomData,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn get_order(&self) -> &O {
+        &self.order
+    }
+
+    #[doc(hidden)]
+    pub fn get_mut_order(&mut self) -> OrderMut<'_, K, V, O, A>
+    where
+        K: SortableByWithOrder<O>,
+        O: TotalOrder,
+    {
+        OrderMut(self)
+    }
+
+    #[doc(hidden)]
+    pub fn get_mut_order_unchecked(&mut self) -> &mut O {
+        &mut self.order
+    }
+}
+
+#[doc(hidden)]
+pub struct OrderMut<'a, K: SortableByWithOrder<O>, V, O: TotalOrder, A: Allocator + Clone>(
+    &'a mut BTreeMap<K, V, O, A>,
+);
+
+impl<K: SortableByWithOrder<O>, V, O: TotalOrder, A: Allocator + Clone> Deref
+    for OrderMut<'_, K, V, O, A>
+{
+    type Target = O;
+    fn deref(&self) -> &Self::Target {
+        &self.0.order
+    }
+}
+
+impl<K: SortableByWithOrder<O>, V, O: TotalOrder, A: Allocator + Clone> DerefMut
+    for OrderMut<'_, K, V, O, A>
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0.order
+    }
+}
+
+impl<K: SortableByWithOrder<O>, V, O: TotalOrder, A: Allocator + Clone> Drop
+    for OrderMut<'_, K, V, O, A>
+{
+    fn drop(&mut self) {
+        // FIXME: perform a safe, in-place sort
+        unsafe {
+            let casted = &mut *(self.0 as *mut _ as *mut BTreeMap<K, V, ManuallyDrop<O>, A>);
+            let order = ManuallyDrop::take(&mut casted.order);
+            let alloc = ManuallyDrop::take(&mut casted.alloc);
+            let original = mem::replace(casted, BTreeMap::new_in(ManuallyDrop::new(order), alloc));
+            self.0.extend(original);
         }
     }
 }
