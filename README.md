@@ -1,53 +1,51 @@
 Direct ports of the standard library's [`BTreeMap`][std::collections::BTreeMap],
 [`BTreeSet`][std::collections::BTreeSet] and [`BinaryHeap`][std::collections::BinaryHeap]
-collections, but which sort according to a specified [`TotalOrder`] rather than relying upon
+collections, but which sort with respect to some runtime context rather than relying upon
 the [`Ord`] trait.
 
-This is primarily useful when the [`TotalOrder`] depends upon runtime state, and therefore
-cannot be provided as an [`Ord`] implementation for any type.
+Whereas the types that you use with the standard library collections are required to implement
+[`Ord`] and/or [`Borrow`], the types that you use with copse's collections are required to
+implement their respective contextual analogues from the [`contextual_cmp`] crate: namely,
+[`ContextualOrd`] and/or [`ContextualBorrow`].  Furthermore, as with the comparison traits in
+the standard library, [`ContextualOrd`] has supertraits [`ContextualPartialOrd`],
+[`ContextualPartialEq`] and [`ContextualEq`]—all of which must therefore be implemented on
+types that implement [`ContextualOrd`].
 
-# Lookup keys
-In the standard library's collections, certain lookups can be performed using a key of type
-`&Q` where the collection's storage key type `K` implements [`Borrow<Q>`]; for example, one
-can use `&str` keys to perform lookups into collections that store `String` keys.  This is
-possible because `String: Borrow<str>` and the [`Borrow`] trait stipulates that borrowed
-values must preserve [`Ord`] order.
+Unfortunately, this is not as straightforward as with the standard library versions:
 
-However, copse's collections do not use the [`Ord`] trait; instead, lookups can only ever
-be performed using the [`TotalOrder`] of type `O` that was supplied upon collection
-creation.  This total order can only compare values of its [`OrderedType`] associated type,
-and hence keys used for lookups must implement [`SortableBy<O>`] in order that the sort key
-can be extracted.
+1. you cannot `#[derive]` the contextual comparison traits (as one will often have done with
+   the standard library traits) because the derivation macro requires implementation details
+   for your context;
+
+2. there are no blanket reflexive implementations of the [`ContextualBorrow`] trait because it
+   would conflict with the blanket implementation that is provided for [`NoContext`]; and
+
+3. indeed no implementations whatsoever of the [`ContextualBorrow`] trait are provided for
+   generic contexts, as particular contexts may have their own specific requirements.
+
+Fortunately, the [`contextual`] macro significantly mitigates the burden these restrictions
+might otherwise impose.  Generally speaking, you will invoke the macro with a `cmp` definition
+for the basis of your key comparisons and zero or more `borrow` definitions for any other
+types with which you may wish to perform lookups into a copse collection.
 
 # Example
 ```rust
-use copse::{BTreeSet, SortableBy, TotalOrder};
-use std::cmp::Ordering;
+use copse::{BTreeSet, contextual_cmp::contextual};
 
-// define a total order
+// define a runtime context
 struct OrderByNthByte {
     n: usize, // runtime state
 }
 
-impl TotalOrder for OrderByNthByte {
-    type OrderedType = [u8];
-    fn cmp(&self, this: &[u8], that: &[u8]) -> Ordering {
-        this.get(self.n).cmp(&that.get(self.n))
+contextual! {
+    fn cmp(&self, other: &[u8], context: &OrderByNthByte) -> Ordering {
+        self.get(context.n).cmp(&other.get(context.n))
     }
+    fn borrow(self: &str, _: &OrderByNthByte) -> &[u8], delegating cmp { self.as_bytes() }
+    fn borrow(self: &String, _: &OrderByNthByte) -> &str, delegating cmp { self }
 }
 
-// define lookup key types for collections sorted by our total order
-impl SortableBy<OrderByNthByte> for [u8] {
-    fn sort_key(&self) -> &[u8] { self }
-}
-impl SortableBy<OrderByNthByte> for str {
-    fn sort_key(&self) -> &[u8] { self.as_bytes() }
-}
-impl SortableBy<OrderByNthByte> for String {
-    fn sort_key(&self) -> &[u8] { SortableBy::<OrderByNthByte>::sort_key(self.as_str()) }
-}
-
-// create a collection using our total order
+// create a collection using our runtime context
 let mut set = BTreeSet::new(OrderByNthByte { n: 9 });
 assert!(set.insert("abcdefghijklm".to_string()));
 assert!(!set.insert("xxxxxxxxxjxx".to_string()));
@@ -56,18 +54,14 @@ assert!(set.contains("jjjjjjjjjj"));
 
 # Collection type parameters
 In addition to the type parameters familiar from the standard library collections, copse's
-collections are additionally parameterised by the type of the [`TotalOrder`].  If the
-total order is not explicitly named, it defaults to the [`OrdTotalOrder`] for the storage
-key's [`OrdKeyType`], which yields behaviour analagous to the standard library
-collections (i.e. sorted by the [`Ord`] trait); explicitly using these items indicates
-that you could (and probably *should*) ditch copse for the standard library instead.
+collections are additionally parameterised by the type of the runtime context.  If the
+runtime context is not explicitly named, it defaults to the zero-sized [`NoContext`],
+which yields behaviour analagous to the standard library collections (i.e. sorted by the
+[`Ord`] trait); explicitly using [`NoContext`] indicates that you could (and probably
+*should*) ditch copse for the standard library instead.
 
 # Crate feature flags
 This crate defines a number of [feature flags], none of which are enabled by default:
-
-* the [`std`] feature provides [`OrdStoredKey`] implementations for some standard library
-  types that are not present in libcore + liballoc, namely [`OsString`], [`OsStr`],
-  [`PathBuf`] and [`Path`];
 
 * each feature in the [`unstable`] set corresponds to the like-named unstable feature in
   the standard library's B-Tree and BinaryHeap collection implementations, all of which
@@ -91,22 +85,17 @@ This crate defines a number of [feature flags], none of which are enabled by def
 [std::collections::BinaryHeap]: https://doc.rust-lang.org/std/collections/struct.BinaryHeap.html
 [`Ord`]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 [`Borrow`]: https://doc.rust-lang.org/std/borrow/trait.Borrow.html
-[`Borrow<Q>`]: https://doc.rust-lang.org/std/borrow/trait.Borrow.html
-[`Ord::cmp`]: https://doc.rust-lang.org/std/cmp/trait.Ord.html#tymethod.cmp
-[`OsString`]: https://doc.rust-lang.org/std/ffi/os_str/struct.OsString.html
-[`OsStr`]: https://doc.rust-lang.org/std/ffi/os_str/struct.OsStr.html
-[`PathBuf`]: https://doc.rust-lang.org/std/path/struct.PathBuf.html
-[`Path`]: https://doc.rust-lang.org/std/path/struct.Path.html
 
-[`TotalOrder`]: https://docs.rs/copse/latest/copse/trait.TotalOrder.html
-[`OrderedType`]: https://docs.rs/copse/latest/copse/trait.TotalOrder.html#associatedtype.OrderedType
-[`SortableBy<O>`]: https://docs.rs/copse/latest/copse/trait.SortableBy.html
-[`OrdTotalOrder`]: https://docs.rs/copse/latest/copse/default/struct.OrdTotalOrder.html
-[`OrdStoredKey`]: https://docs.rs/copse/latest/copse/default/trait.OrdStoredKey.html
-[`OrdKeyType`]: https://docs.rs/copse/latest/copse/default/trait.OrdStoredKey.html#associatedtype.OrdKeyType
+[`contextual_cmp`]: https://docs.rs/contextual_cmp/latest/
+[`ContextualBorrow`]: https://docs.rs/contextual_cmp/latest/borrow/trait.ContextualBorrow.html
+[`ContextualEq`]: https://docs.rs/contextual_cmp/latest/cmp/trait.ContextualEq.html
+[`ContextualOrd`]: https://docs.rs/contextual_cmp/latest/cmp/trait.ContextualOrd.html
+[`ContextualPartialEq`]: https://docs.rs/contextual_cmp/latest/cmp/trait.ContextualPartialEq.html
+[`ContextualPartialOrd`]: https://docs.rs/contextual_cmp/latest/cmp/trait.ContextualPartialOrd.html
+[`NoContext`]: https://docs.rs/contextual_cmp/latest/cmp/struct.NoContext.html
+[`contextual`]: https://docs.rs/contextual_cmp/latest/macro.contextual.html
 
 [feature flags]: https://docs.rs/crate/copse/latest/features
-[`std`]: https://docs.rs/crate/copse/latest/features#std
 [`unstable`]: https://docs.rs/crate/copse/latest/features#unstable
 [`btreemap_alloc`]: https://docs.rs/crate/copse/latest/features#btreemap_alloc
 [`allocator_api`]: https://docs.rs/crate/copse/latest/features#allocator_api

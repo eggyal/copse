@@ -1,9 +1,9 @@
 //! A priority queue implemented with a binary heap.
 //!
-//! Insertion and popping the largest element have *O*(log(*n*)) time complexity.
-//! Checking the largest element is *O*(1). Converting a vector to a binary heap
-//! can be done in-place, and has *O*(*n*) complexity. A binary heap can also be
-//! converted to a sorted vector in-place, allowing it to be used for an *O*(*n* * log(*n*))
+//! Insertion and popping the largest element have *C*(log(*n*)) time complexity.
+//! Checking the largest element is *C*(1). Converting a vector to a binary heap
+//! can be done in-place, and has *C*(*n*) complexity. A binary heap can also be
+//! converted to a sorted vector in-place, allowing it to be used for an *C*(*n* * log(*n*))
 //! in-place heapsort.
 //!
 //! # Examples
@@ -17,8 +17,7 @@
 //! [dir_graph]: https://en.wikipedia.org/wiki/Directed_graph
 //!
 //! ```
-//! use copse::{BinaryHeap, SortableBy, TotalOrder};
-//! use std::cmp::Ordering;
+//! use copse::{BinaryHeap, contextual_cmp::contextual};
 //!
 //! #[derive(Copy, Clone)]
 //! struct State {
@@ -29,16 +28,11 @@
 //! // A reversed-cost order for `State`
 //! struct ReversedCostOrder;
 //!
-//! impl TotalOrder for ReversedCostOrder {
-//!     type OrderedType = State;
-//!     fn cmp(&self, this: &State, that: &State) -> Ordering {
-//!         // Notice that the we flip the ordering on costs.
-//!         that.cost.cmp(&this.cost)
+//! contextual! {
+//!     fn cmp(&self, other: &State, context: &ReversedCostOrder) -> Ordering {
+//!         // Notice that we flip the ordering on costs.
+//!         other.cost.cmp(&self.cost)
 //!     }
-//! }
-//!
-//! impl SortableBy<ReversedCostOrder> for State {
-//!     fn sort_key(&self) -> &State { self }
 //! }
 //!
 //! // Each node is represented as a `usize`, for a shorter implementation.
@@ -154,10 +148,7 @@ use alloc::vec::{self, Vec};
 use cfg_if::cfg_if;
 
 use super::SpecExtend;
-use crate::{
-    default::{OrdStoredKey, OrdTotalOrder},
-    SortableBy, SortableByWithOrder, TotalOrder,
-};
+use contextual_cmp::{borrow::ContextualBorrow, prelude::*};
 
 #[cfg(test)]
 mod tests;
@@ -166,14 +157,15 @@ mod tests;
 ///
 /// This will be a max-heap.
 ///
-/// It is a logic error for an item or total order to be modified in such a way
-/// that the item's ordering relative to any other item, as determined by that
-/// total order, changes while they are in the heap. This is normally only possible
-/// through interior mutability, global state, I/O, or unsafe code. The behavior
-/// resulting from such a logic error is not specified, but will be encapsulated
-/// to the `BinaryHeap` that observed the logic error and not result in undefined
-/// behavior. This could include panics, incorrect results, aborts, memory leaks,
-/// and non-termination.
+/// It is a logic error for an item or runtime context to be modified (except via the
+/// [`context_mut`] method) in such a way  that the item's ordering relative to any
+/// other item, as determined by that runtime context, changes while they are in the
+/// heap. This is normally only possible through the [`context_mut_unchecked`] method,
+/// interior mutability, global state, I/O, or unsafe code. The behavior resulting
+/// from such a logic error is not specified, but will be encapsulated to the
+/// `BinaryHeap` that observed the logic error and not result in undefined behavior.
+/// This could include panics, incorrect results, aborts, memory leaks, and
+/// non-termination.
 ///
 /// As long as no elements change their relative order while being in the heap
 /// as described above, the API of `BinaryHeap` guarantees that the heap
@@ -237,23 +229,18 @@ mod tests;
 /// ## Min-heap
 ///
 /// Either [`core::cmp::Reverse`], a custom [`Ord`] implementation or a custom
-/// [`TotalOrder`] implementation can be used to make `BinaryHeap` a min-heap.
+/// runtime context implementation can be used to make `BinaryHeap` a min-heap.
 /// This makes `heap.pop()` return the smallest value instead of the greatest one.
 ///
 /// ```
-/// use copse::{BinaryHeap, SortableBy, TotalOrder};
-/// use std::cmp::Ordering;
+/// use copse::{BinaryHeap, contextual_cmp::contextual};
 ///
 /// struct ReversedOrder;
-/// impl TotalOrder for ReversedOrder {
-///     type OrderedType = i32;
-///     fn cmp(&self, this: &i32, that: &i32) -> Ordering {
-///         that.cmp(this)
-///     }
-/// }
 ///
-/// impl SortableBy<ReversedOrder> for i32 {
-///     fn sort_key(&self) -> &i32 { self }
+/// contextual! {
+///     fn cmp(&self, other: &i32, context: &ReversedOrder) -> Ordering {
+///         other.cmp(self)
+///     }
 /// }
 ///
 /// let mut heap = BinaryHeap::new(ReversedOrder);
@@ -273,11 +260,13 @@ mod tests;
 ///
 /// | [push]  | [pop]         | [peek]/[peek\_mut] |
 /// |---------|---------------|--------------------|
-/// | *O*(1)~ | *O*(log(*n*)) | *O*(1)             |
+/// | *C*(1)~ | *C*(log(*n*)) | *C*(1)             |
 ///
 /// The value for `push` is an expected cost; the method documentation gives a
 /// more detailed analysis.
 ///
+/// [`context_mut`]: Self::context_mut
+/// [`context_mut_unchecked`]: Self::context_mut_unchecked
 /// [`core::cmp::Reverse`]: core::cmp::Reverse
 /// [`Ord`]: core::cmp::Ord
 /// [`Cell`]: core::cell::Cell
@@ -286,9 +275,9 @@ mod tests;
 /// [pop]: BinaryHeap::pop
 /// [peek]: BinaryHeap::peek
 /// [peek\_mut]: BinaryHeap::peek_mut
-pub struct BinaryHeap<T, O = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>> {
+pub struct BinaryHeap<T, C = NoContext> {
     data: Vec<T>,
-    order: O,
+    context: C,
 }
 
 /// Structure wrapping a mutable reference to the greatest item on a
@@ -298,24 +287,20 @@ pub struct BinaryHeap<T, O = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>> {
 /// its documentation for more.
 ///
 /// [`peek_mut`]: BinaryHeap::peek_mut
-pub struct PeekMut<
-    'a,
-    T: 'a + SortableByWithOrder<O>,
-    O: TotalOrder = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>,
-> {
-    heap: &'a mut BinaryHeap<T, O>,
+pub struct PeekMut<'a, T: 'a + ContextualOrd<C>, C = NoContext> {
+    heap: &'a mut BinaryHeap<T, C>,
     // If a set_len + sift_down are required, this is Some. If a &mut T has not
     // yet been exposed to peek_mut()'s caller, it's None.
     original_len: Option<NonZeroUsize>,
 }
 
-impl<T: SortableByWithOrder<O> + fmt::Debug, O: TotalOrder> fmt::Debug for PeekMut<'_, T, O> {
+impl<T: ContextualOrd<C> + fmt::Debug, C> fmt::Debug for PeekMut<'_, T, C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("PeekMut").field(&self.heap.data[0]).finish()
     }
 }
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder> Drop for PeekMut<'_, T, O> {
+impl<T: ContextualOrd<C>, C> Drop for PeekMut<'_, T, C> {
     fn drop(&mut self) {
         if let Some(original_len) = self.original_len {
             // SAFETY: That's how many elements were in the Vec at the time of
@@ -331,7 +316,7 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> Drop for PeekMut<'_, T, O> {
     }
 }
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder> Deref for PeekMut<'_, T, O> {
+impl<T: ContextualOrd<C>, C> Deref for PeekMut<'_, T, C> {
     type Target = T;
     fn deref(&self) -> &T {
         debug_assert!(!self.heap.is_empty());
@@ -340,7 +325,7 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> Deref for PeekMut<'_, T, O> {
     }
 }
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder> DerefMut for PeekMut<'_, T, O> {
+impl<T: ContextualOrd<C>, C> DerefMut for PeekMut<'_, T, C> {
     fn deref_mut(&mut self) -> &mut T {
         debug_assert!(!self.heap.is_empty());
 
@@ -368,9 +353,9 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> DerefMut for PeekMut<'_, T, O> {
     }
 }
 
-impl<'a, T: SortableByWithOrder<O>, O: TotalOrder> PeekMut<'a, T, O> {
+impl<'a, T: ContextualOrd<C>, C> PeekMut<'a, T, C> {
     /// Removes the peeked value from the heap and returns it.
-    pub fn pop(mut this: PeekMut<'a, T, O>) -> T {
+    pub fn pop(mut this: PeekMut<'a, T, C>) -> T {
         if let Some(original_len) = this.original_len.take() {
             // SAFETY: This is how many elements were in the Vec at the time of
             // the BinaryHeap::peek_mut call.
@@ -384,9 +369,9 @@ impl<'a, T: SortableByWithOrder<O>, O: TotalOrder> PeekMut<'a, T, O> {
     }
 }
 
-impl<T: Clone, O: Clone> Clone for BinaryHeap<T, O> {
+impl<T: Clone, C: Clone> Clone for BinaryHeap<T, C> {
     fn clone(&self) -> Self {
-        BinaryHeap { data: self.data.clone(), order: self.order.clone() }
+        BinaryHeap { data: self.data.clone(), context: self.context.clone() }
     }
 
     fn clone_from(&mut self, source: &Self) {
@@ -394,21 +379,21 @@ impl<T: Clone, O: Clone> Clone for BinaryHeap<T, O> {
     }
 }
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder + Default> Default for BinaryHeap<T, O> {
+impl<T: ContextualOrd<C>, C: Default> Default for BinaryHeap<T, C> {
     /// Creates an empty `BinaryHeap<T>`.
     #[inline]
-    fn default() -> BinaryHeap<T, O> {
-        BinaryHeap::new(O::default())
+    fn default() -> BinaryHeap<T, C> {
+        BinaryHeap::new(C::default())
     }
 }
 
-impl<T: fmt::Debug, O> fmt::Debug for BinaryHeap<T, O> {
+impl<T: fmt::Debug, C> fmt::Debug for BinaryHeap<T, C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.iter()).finish()
     }
 }
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
+impl<T: ContextualOrd<C>, C> BinaryHeap<T, C> {
     /// Creates an empty `BinaryHeap` as a max-heap.
     ///
     /// # Examples
@@ -421,8 +406,8 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
     /// heap.push(4);
     /// ```
     #[must_use]
-    pub fn new(order: O) -> BinaryHeap<T, O> {
-        BinaryHeap { data: vec![], order }
+    pub fn new(context: C) -> BinaryHeap<T, C> {
+        BinaryHeap { data: vec![], context }
     }
 
     /// Creates an empty `BinaryHeap` with at least the specified capacity.
@@ -441,8 +426,8 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
     /// heap.push(4);
     /// ```
     #[must_use]
-    pub fn with_capacity(order: O, capacity: usize) -> BinaryHeap<T, O> {
-        BinaryHeap { data: Vec::with_capacity(capacity), order }
+    pub fn with_capacity(context: C, capacity: usize) -> BinaryHeap<T, C> {
+        BinaryHeap { data: Vec::with_capacity(capacity), context }
     }
 
     /// Returns a mutable reference to the greatest item in the binary heap, or
@@ -473,9 +458,9 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
     ///
     /// # Time complexity
     ///
-    /// If the item is modified then the worst case time complexity is *O*(log(*n*)),
-    /// otherwise it's *O*(1).
-    pub fn peek_mut(&mut self) -> Option<PeekMut<'_, T, O>> {
+    /// If the item is modified then the worst case time complexity is *C*(log(*n*)),
+    /// otherwise it's *C*(1).
+    pub fn peek_mut(&mut self) -> Option<PeekMut<'_, T, C>> {
         if self.is_empty() { None } else { Some(PeekMut { heap: self, original_len: None }) }
     }
 
@@ -497,7 +482,7 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
     ///
     /// # Time complexity
     ///
-    /// The worst case cost of `pop` on a heap containing *n* elements is *O*(log(*n*)).
+    /// The worst case cost of `pop` on a heap containing *n* elements is *C*(log(*n*)).
     pub fn pop(&mut self) -> Option<T> {
         self.data.pop().map(|mut item| {
             if !self.is_empty() {
@@ -530,15 +515,15 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
     ///
     /// The expected cost of `push`, averaged over every possible ordering of
     /// the elements being pushed, and over a sufficiently large number of
-    /// pushes, is *O*(1). This is the most meaningful cost metric when pushing
+    /// pushes, is *C*(1). This is the most meaningful cost metric when pushing
     /// elements that are *not* already in any sorted pattern.
     ///
     /// The time complexity degrades if elements are pushed in predominantly
     /// ascending order. In the worst case, elements are pushed in ascending
-    /// sorted order and the amortized cost per push is *O*(log(*n*)) against a heap
+    /// sorted order and the amortized cost per push is *C*(log(*n*)) against a heap
     /// containing *n* elements.
     ///
-    /// The worst case cost of a *single* call to `push` is *O*(*n*). The worst case
+    /// The worst case cost of a *single* call to `push` is *C*(*n*). The worst case
     /// occurs when capacity is exhausted and needs a resize. The resize cost
     /// has been amortized in the previous figures.
     pub fn push(&mut self, item: T) {
@@ -611,7 +596,7 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
             //  and so hole.pos() - 1 can't underflow.
             //  This guarantees that parent < hole.pos() so
             //  it's a valid index and also != hole.pos().
-            if self.order.le(hole.element(), unsafe { hole.get(parent) }) {
+            if hole.element().contextual_le(unsafe { hole.get(parent) }, &self.context) {
                 break;
             }
 
@@ -642,12 +627,13 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
             //  child + 1 == 2 * hole.pos() + 2 != hole.pos().
             // FIXME: 2 * hole.pos() + 1 or 2 * hole.pos() + 2 could overflow
             //  if T is a ZST
-            child += unsafe { self.order.le(hole.get(child), hole.get(child + 1)) } as usize;
+            child += unsafe { hole.get(child).contextual_le(hole.get(child + 1), &self.context) }
+                as usize;
 
             // if we are already in order, stop.
             // SAFETY: child is now either the old child or the old child+1
             //  We already proven that both are < self.len() and != hole.pos()
-            if self.order.ge(hole.element(), unsafe { hole.get(child) }) {
+            if hole.element().contextual_ge(unsafe { hole.get(child) }, &self.context) {
                 return;
             }
 
@@ -658,7 +644,9 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
 
         // SAFETY: && short circuit, which means that in the
         //  second condition it's already true that child == end - 1 < self.len().
-        if child == end - 1 && self.order.lt(hole.element(), unsafe { hole.get(child) }) {
+        if child == end - 1
+            && hole.element().contextual_lt(unsafe { hole.get(child) }, &self.context)
+        {
             // SAFETY: child is already proven to be a valid index and
             //  child == 2 * hole.pos() + 1 != hole.pos().
             unsafe { hole.move_to(child) };
@@ -700,7 +688,8 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
             //  child + 1 == 2 * hole.pos() + 2 != hole.pos().
             // FIXME: 2 * hole.pos() + 1 or 2 * hole.pos() + 2 could overflow
             //  if T is a ZST
-            child += unsafe { self.order.le(hole.get(child), hole.get(child + 1)) } as usize;
+            child += unsafe { hole.get(child).contextual_le(hole.get(child + 1), &self.context) }
+                as usize;
 
             // SAFETY: Same as above
             unsafe { hole.move_to(child) };
@@ -733,9 +722,9 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
             (usize::BITS - x.leading_zeros() - 1) as usize
         }
 
-        // `rebuild` takes O(self.len()) operations
+        // `rebuild` takes C(self.len()) operations
         // and about 2 * self.len() comparisons in the worst case
-        // while repeating `sift_up` takes O(tail_len * log(start)) operations
+        // while repeating `sift_up` takes C(tail_len * log(start)) operations
         // and about 1 * tail_len * log_2(start) comparisons in the worst case,
         // assuming start >= tail_len. For larger heaps, the crossover point
         // no longer follows this reasoning and was determined empirically.
@@ -805,7 +794,7 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
     /// its implementation.
     ///
     /// Note:
-    /// * `.drain_sorted()` is *O*(*n* \* log(*n*)); much slower than `.drain()`.
+    /// * `.drain_sorted()` is *C*(*n* \* log(*n*)); much slower than `.drain()`.
     ///   You should use the latter for most cases.
     ///
     /// # Examples
@@ -823,7 +812,7 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
     /// ```
     #[inline]
     #[cfg(feature = "binary_heap_drain_sorted")]
-    pub fn drain_sorted(&mut self) -> DrainSorted<'_, T, O> {
+    pub fn drain_sorted(&mut self) -> DrainSorted<'_, T, C> {
         DrainSorted { inner: self }
     }
 
@@ -850,8 +839,8 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
     where
         F: FnMut(&T) -> bool,
     {
-        struct RebuildOnDrop<'a, T: SortableByWithOrder<O>, O: TotalOrder> {
-            heap: &'a mut BinaryHeap<T, O>,
+        struct RebuildOnDrop<'a, T: ContextualOrd<C>, C = NoContext> {
+            heap: &'a mut BinaryHeap<T, C>,
             first_removed: usize,
         }
 
@@ -867,7 +856,7 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
             keep
         });
 
-        impl<'a, T: SortableByWithOrder<O>, O: TotalOrder> Drop for RebuildOnDrop<'a, T, O> {
+        impl<'a, T: ContextualOrd<C>, C> Drop for RebuildOnDrop<'a, T, C> {
             fn drop(&mut self) {
                 // data[..first_removed] is untouched, so we only need to
                 // rebuild the tail:
@@ -876,45 +865,57 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
         }
     }
 
-    #[doc(hidden)]
-    pub fn get_order(&self) -> &O {
-        &self.order
+    /// Borrow this heap's context.
+    pub fn context(&self) -> &C {
+        &self.context
     }
 
-    #[doc(hidden)]
-    pub fn get_mut_order(&mut self) -> OrderMut<'_, T, O> {
-        OrderMut(self)
+    /// Mutably borrow this heap's context.  When the returned guard is dropped, the
+    /// heap will be rebuilt.
+    pub fn context_mut(&mut self) -> ContextMut<'_, T, C> {
+        ContextMut(self)
     }
 
-    #[doc(hidden)]
-    pub fn get_mut_order_unchecked(&mut self) -> &mut O {
-        &mut self.order
+    /// Mutably borrow this heap's context.  It is a logic error for the context to be
+    /// modified in a way that changes the relative ordering of any two items contained
+    /// in the heap.  The behavior resulting from such a logic error is not specified,
+    /// but will be encapsulated to the `BinaryHeap` that observed the logic error and
+    /// not result in undefined behavior. This could include panics, incorrect results,
+    /// aborts, memory leaks, and non-termination.
+    ///
+    /// If the context might be modified in such a way, consider using [`context_mut`]
+    /// instead, which will reorder the heap once the guard is dropped so as to uphold
+    /// its invariants.
+    ///
+    /// [`context_mut`]: Self::context_mut
+    pub fn context_mut_unchecked(&mut self) -> &mut C {
+        &mut self.context
     }
 }
 
 #[doc(hidden)]
-pub struct OrderMut<'a, T: SortableByWithOrder<O>, O: TotalOrder>(&'a mut BinaryHeap<T, O>);
+pub struct ContextMut<'a, T: ContextualOrd<C>, C = NoContext>(&'a mut BinaryHeap<T, C>);
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder> Deref for OrderMut<'_, T, O> {
-    type Target = O;
+impl<T: ContextualOrd<C>, C> Deref for ContextMut<'_, T, C> {
+    type Target = C;
     fn deref(&self) -> &Self::Target {
-        &self.0.order
+        &self.0.context
     }
 }
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder> DerefMut for OrderMut<'_, T, O> {
+impl<T: ContextualOrd<C>, C> DerefMut for ContextMut<'_, T, C> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0.order
+        &mut self.0.context
     }
 }
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder> Drop for OrderMut<'_, T, O> {
+impl<T: ContextualOrd<C>, C> Drop for ContextMut<'_, T, C> {
     fn drop(&mut self) {
         self.0.rebuild()
     }
 }
 
-impl<T, O> BinaryHeap<T, O> {
+impl<T, C> BinaryHeap<T, C> {
     /// Returns an iterator visiting all values in the underlying vector, in
     /// arbitrary order.
     ///
@@ -949,7 +950,7 @@ impl<T, O> BinaryHeap<T, O> {
     /// assert_eq!(heap.into_iter_sorted().take(2).collect::<Vec<_>>(), [5, 4]);
     /// ```
     #[cfg(feature = "binary_heap_into_iter_sorted")]
-    pub fn into_iter_sorted(self) -> IntoIterSorted<T, O> {
+    pub fn into_iter_sorted(self) -> IntoIterSorted<T, C> {
         IntoIterSorted { inner: self }
     }
 
@@ -973,7 +974,7 @@ impl<T, O> BinaryHeap<T, O> {
     ///
     /// # Time complexity
     ///
-    /// Cost is *O*(1) in the worst case.
+    /// Cost is *C*(1) in the worst case.
     #[must_use]
     pub fn peek(&self) -> Option<&T> {
         self.data.get(0)
@@ -1502,12 +1503,12 @@ cfg_if! {
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 #[cfg(feature = "binary_heap_into_iter_sorted")]
 #[derive(Clone, Debug)]
-pub struct IntoIterSorted<T, O = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>> {
-    inner: BinaryHeap<T, O>,
+pub struct IntoIterSorted<T, C = NoContext> {
+    inner: BinaryHeap<T, C>,
 }
 
 #[cfg(feature = "binary_heap_into_iter_sorted")]
-impl<T: SortableByWithOrder<O>, O: TotalOrder> Iterator for IntoIterSorted<T, O> {
+impl<T: ContextualOrd<C>, C> Iterator for IntoIterSorted<T, C> {
     type Item = T;
 
     #[inline]
@@ -1523,13 +1524,13 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> Iterator for IntoIterSorted<T, O>
 }
 
 #[cfg(feature = "binary_heap_into_iter_sorted")]
-impl<T: SortableByWithOrder<O>, O: TotalOrder> ExactSizeIterator for IntoIterSorted<T, O> {}
+impl<T: ContextualOrd<C>, C> ExactSizeIterator for IntoIterSorted<T, C> {}
 
 #[cfg(feature = "binary_heap_into_iter_sorted")]
-impl<T: SortableByWithOrder<O>, O: TotalOrder> FusedIterator for IntoIterSorted<T, O> {}
+impl<T: ContextualOrd<C>, C> FusedIterator for IntoIterSorted<T, C> {}
 
 #[cfg(all(feature = "binary_heap_into_iter_sorted", feature = "trusted_len"))]
-unsafe impl<T: SortableByWithOrder<O>, O: TotalOrder> TrustedLen for IntoIterSorted<T, O> {}
+unsafe impl<T: ContextualOrd<C>, C> TrustedLen for IntoIterSorted<T, C> {}
 
 /// A draining iterator over the elements of a `BinaryHeap`.
 ///
@@ -1580,23 +1581,17 @@ impl<T> FusedIterator for Drain<'_, T> {}
 /// [`drain_sorted`]: BinaryHeap::drain_sorted
 #[cfg(feature = "binary_heap_drain_sorted")]
 #[derive(Debug)]
-pub struct DrainSorted<
-    'a,
-    T: SortableByWithOrder<O>,
-    O: TotalOrder = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>,
-> {
-    inner: &'a mut BinaryHeap<T, O>,
+pub struct DrainSorted<'a, T: ContextualOrd<C>, C = NoContext> {
+    inner: &'a mut BinaryHeap<T, C>,
 }
 
 #[cfg(feature = "binary_heap_drain_sorted")]
-impl<'a, T: SortableByWithOrder<O>, O: TotalOrder> Drop for DrainSorted<'a, T, O> {
+impl<'a, T: ContextualOrd<C>, C> Drop for DrainSorted<'a, T, C> {
     /// Removes heap elements in heap order.
     fn drop(&mut self) {
-        struct DropGuard<'r, 'a, T: SortableByWithOrder<O>, O: TotalOrder>(
-            &'r mut DrainSorted<'a, T, O>,
-        );
+        struct DropGuard<'r, 'a, T: ContextualOrd<C>, C = NoContext>(&'r mut DrainSorted<'a, T, C>);
 
-        impl<'r, 'a, T: SortableByWithOrder<O>, O: TotalOrder> Drop for DropGuard<'r, 'a, T, O> {
+        impl<'r, 'a, T: ContextualOrd<C>, C> Drop for DropGuard<'r, 'a, T, C> {
             fn drop(&mut self) {
                 while self.0.inner.pop().is_some() {}
             }
@@ -1611,7 +1606,7 @@ impl<'a, T: SortableByWithOrder<O>, O: TotalOrder> Drop for DrainSorted<'a, T, O
 }
 
 #[cfg(feature = "binary_heap_drain_sorted")]
-impl<T: SortableByWithOrder<O>, O: TotalOrder> Iterator for DrainSorted<'_, T, O> {
+impl<T: ContextualOrd<C>, C> Iterator for DrainSorted<'_, T, C> {
     type Item = T;
 
     #[inline]
@@ -1627,28 +1622,26 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> Iterator for DrainSorted<'_, T, O
 }
 
 #[cfg(feature = "binary_heap_drain_sorted")]
-impl<T: SortableByWithOrder<O>, O: TotalOrder> ExactSizeIterator for DrainSorted<'_, T, O> {}
+impl<T: ContextualOrd<C>, C> ExactSizeIterator for DrainSorted<'_, T, C> {}
 
 #[cfg(feature = "binary_heap_drain_sorted")]
-impl<T: SortableByWithOrder<O>, O: TotalOrder> FusedIterator for DrainSorted<'_, T, O> {}
+impl<T: ContextualOrd<C>, C> FusedIterator for DrainSorted<'_, T, C> {}
 
 #[cfg(all(feature = "binary_heap_drain_sorted", feature = "trusted_len"))]
-unsafe impl<T: SortableByWithOrder<O>, O: TotalOrder> TrustedLen for DrainSorted<'_, T, O> {}
+unsafe impl<T: ContextualOrd<C>, C> TrustedLen for DrainSorted<'_, T, C> {}
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder + Default> From<Vec<T>> for BinaryHeap<T, O> {
+impl<T: ContextualOrd<C>, C: Default> From<Vec<T>> for BinaryHeap<T, C> {
     /// Converts a `Vec<T>` into a `BinaryHeap<T>`.
     ///
-    /// This conversion happens in-place, and has *O*(*n*) time complexity.
-    fn from(vec: Vec<T>) -> BinaryHeap<T, O> {
-        let mut heap = BinaryHeap { data: vec, order: O::default() };
+    /// This conversion happens in-place, and has *C*(*n*) time complexity.
+    fn from(vec: Vec<T>) -> BinaryHeap<T, C> {
+        let mut heap = BinaryHeap { data: vec, context: C::default() };
         heap.rebuild();
         heap
     }
 }
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder + Default, const N: usize> From<[T; N]>
-    for BinaryHeap<T, O>
-{
+impl<T: ContextualOrd<C>, C: Default, const N: usize> From<[T; N]> for BinaryHeap<T, C> {
     /// ```
     /// use copse::BinaryHeap;
     ///
@@ -1663,23 +1656,23 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder + Default, const N: usize> From<[T
     }
 }
 
-impl<T, O> From<BinaryHeap<T, O>> for Vec<T> {
+impl<T, C> From<BinaryHeap<T, C>> for Vec<T> {
     /// Converts a `BinaryHeap<T>` into a `Vec<T>`.
     ///
     /// This conversion requires no data movement or allocation, and has
     /// constant time complexity.
-    fn from(heap: BinaryHeap<T, O>) -> Vec<T> {
+    fn from(heap: BinaryHeap<T, C>) -> Vec<T> {
         heap.data
     }
 }
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder + Default> FromIterator<T> for BinaryHeap<T, O> {
-    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> BinaryHeap<T, O> {
+impl<T: ContextualOrd<C>, C: Default> FromIterator<T> for BinaryHeap<T, C> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> BinaryHeap<T, C> {
         BinaryHeap::from(iter.into_iter().collect::<Vec<_>>())
     }
 }
 
-impl<T, O> IntoIterator for BinaryHeap<T, O> {
+impl<T, C> IntoIterator for BinaryHeap<T, C> {
     type Item = T;
     type IntoIter = IntoIter<T>;
 
@@ -1714,7 +1707,7 @@ impl<T, O> IntoIterator for BinaryHeap<T, O> {
     }
 }
 
-impl<'a, T, O> IntoIterator for &'a BinaryHeap<T, O> {
+impl<'a, T, C> IntoIterator for &'a BinaryHeap<T, C> {
     type Item = &'a T;
     type IntoIter = Iter<'a, T>;
 
@@ -1723,7 +1716,7 @@ impl<'a, T, O> IntoIterator for &'a BinaryHeap<T, O> {
     }
 }
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder> Extend<T> for BinaryHeap<T, O> {
+impl<T: ContextualOrd<C>, C> Extend<T> for BinaryHeap<T, C> {
     #[inline]
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         <Self as SpecExtend<I>>::spec_extend(self, iter);
@@ -1744,13 +1737,13 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> Extend<T> for BinaryHeap<T, O> {
 
 cfg_if! {
     if #[cfg(feature = "specialization")] {
-        impl<T: SortableByWithOrder<O>, O: TotalOrder, I: IntoIterator<Item = T>> SpecExtend<I> for BinaryHeap<T, O> {
+        impl<T: ContextualOrd<C>, C, I: IntoIterator<Item = T>> SpecExtend<I> for BinaryHeap<T, C> {
             default fn spec_extend(&mut self, iter: I) {
                 self.extend_desugared(iter.into_iter());
             }
         }
 
-        impl<T: SortableByWithOrder<O>, O: TotalOrder> SpecExtend<Vec<T>> for BinaryHeap<T, O> {
+        impl<T: ContextualOrd<C>, C> SpecExtend<Vec<T>> for BinaryHeap<T, C> {
             fn spec_extend(&mut self, ref mut other: Vec<T>) {
                 let start = self.data.len();
                 self.data.append(other);
@@ -1758,13 +1751,13 @@ cfg_if! {
             }
         }
 
-        impl<T: SortableByWithOrder<O>, O: TotalOrder> SpecExtend<BinaryHeap<T, O>> for BinaryHeap<T, O> {
-            fn spec_extend(&mut self, ref mut other: BinaryHeap<T, O>) {
+        impl<T: ContextualOrd<C>, C> SpecExtend<BinaryHeap<T, C>> for BinaryHeap<T, C> {
+            fn spec_extend(&mut self, ref mut other: BinaryHeap<T, C>) {
                 self.append(other);
             }
         }
     } else {
-        impl<T: SortableByWithOrder<O>, O: TotalOrder, I: IntoIterator<Item = T>> SpecExtend<I> for BinaryHeap<T, O> {
+        impl<T: ContextualOrd<C>, C, I: IntoIterator<Item = T>> SpecExtend<I> for BinaryHeap<T, C> {
             fn spec_extend(&mut self, iter: I) {
                 self.extend_desugared(iter.into_iter());
             }
@@ -1772,7 +1765,7 @@ cfg_if! {
     }
 }
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
+impl<T: ContextualOrd<C>, C> BinaryHeap<T, C> {
     fn extend_desugared<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         let iterator = iter.into_iter();
         let (lower, _) = iterator.size_hint();
@@ -1783,7 +1776,7 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
     }
 }
 
-impl<'a, T: 'a + SortableByWithOrder<O> + Copy, O: TotalOrder> Extend<&'a T> for BinaryHeap<T, O> {
+impl<'a, T: 'a + ContextualOrd<C> + Copy, C> Extend<&'a T> for BinaryHeap<T, C> {
     fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
         self.extend(iter.into_iter().cloned());
     }

@@ -1,4 +1,3 @@
-use crate::{SortableByWithOrder, TotalOrder};
 use core::hint;
 use core::ops::RangeBounds;
 use core::ptr;
@@ -7,6 +6,7 @@ use super::node::{marker, ForceResult::*, Handle, NodeRef};
 use super::search::SearchBound;
 
 use crate::polyfill::*;
+use contextual_cmp::{borrow::ContextualBorrow, cmp::ContextualOrd};
 // `front` and `back` are always both `None` or both `Some`.
 pub struct LeafRange<BorrowType, K, V> {
     front: Option<Handle<NodeRef<BorrowType, K, V, marker::Leaf>, marker::Edge>>,
@@ -250,18 +250,17 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
     /// # Safety
     /// Unless `BorrowType` is `Immut`, do not use the handles to visit the same
     /// KV twice.
-    unsafe fn find_leaf_edges_spanning_range<Q: ?Sized, R, O>(
+    unsafe fn find_leaf_edges_spanning_range<Q: ?Sized, R, C>(
         self,
-        order: &O,
+        context: &C,
         range: R,
     ) -> LeafRange<BorrowType, K, V>
     where
-        K: SortableByWithOrder<O>,
-        Q: SortableByWithOrder<O>,
+        K: ContextualBorrow<Q, C> + ContextualOrd<C>,
+        Q: ContextualOrd<C>,
         R: RangeBounds<Q>,
-        O: TotalOrder,
     {
-        match self.search_tree_for_bifurcation(order, &range) {
+        match self.search_tree_for_bifurcation(context, &range) {
             Err(_) => LeafRange::none(),
             Ok((
                 node,
@@ -277,9 +276,9 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
                         (Leaf(f), Leaf(b)) => return LeafRange { front: Some(f), back: Some(b) },
                         (Internal(f), Internal(b)) => {
                             (lower_edge, lower_child_bound) =
-                                f.descend().find_lower_bound_edge(order, lower_child_bound);
+                                f.descend().find_lower_bound_edge(context, lower_child_bound);
                             (upper_edge, upper_child_bound) =
-                                b.descend().find_upper_bound_edge(order, upper_child_bound);
+                                b.descend().find_upper_bound_edge(context, upper_child_bound);
                         }
                         _ => unreachable!("BTreeMap has different depths"),
                     }
@@ -304,15 +303,14 @@ impl<'a, K: 'a, V: 'a> NodeRef<marker::Immut<'a>, K, V, marker::LeafOrInternal> 
     ///
     /// The result is meaningful only if the tree is ordered by key, like the tree
     /// in a `BTreeMap` is.
-    pub fn range_search<Q, R, O>(self, order: &O, range: R) -> LeafRange<marker::Immut<'a>, K, V>
+    pub fn range_search<Q, R, C>(self, context: &C, range: R) -> LeafRange<marker::Immut<'a>, K, V>
     where
-        K: SortableByWithOrder<O>,
-        Q: ?Sized + SortableByWithOrder<O>,
+        K: ContextualBorrow<Q, C> + ContextualOrd<C>,
+        Q: ?Sized + ContextualOrd<C>,
         R: RangeBounds<Q>,
-        O: TotalOrder,
     {
         // SAFETY: our borrow type is immutable.
-        unsafe { self.find_leaf_edges_spanning_range(order, range) }
+        unsafe { self.find_leaf_edges_spanning_range(context, range) }
     }
 
     /// Finds the pair of leaf edges delimiting an entire tree.
@@ -331,14 +329,13 @@ impl<'a, K: 'a, V: 'a> NodeRef<marker::ValMut<'a>, K, V, marker::LeafOrInternal>
     ///
     /// # Safety
     /// Do not use the duplicate handles to visit the same KV twice.
-    pub fn range_search<Q, R, O>(self, order: &O, range: R) -> LeafRange<marker::ValMut<'a>, K, V>
+    pub fn range_search<Q, R, C>(self, context: &C, range: R) -> LeafRange<marker::ValMut<'a>, K, V>
     where
-        K: SortableByWithOrder<O>,
-        Q: ?Sized + SortableByWithOrder<O>,
+        K: ContextualBorrow<Q, C> + ContextualOrd<C>,
+        Q: ?Sized + ContextualOrd<C>,
         R: RangeBounds<Q>,
-        O: TotalOrder,
     {
-        unsafe { self.find_leaf_edges_spanning_range(order, range) }
+        unsafe { self.find_leaf_edges_spanning_range(context, range) }
     }
 
     /// Splits a unique reference into a pair of leaf edges delimiting the full range of the tree.
@@ -729,19 +726,18 @@ impl<BorrowType: marker::BorrowType, K, V>
 impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::LeafOrInternal> {
     /// Returns the leaf edge corresponding to the first point at which the
     /// given bound is true.
-    pub fn lower_bound<Q: ?Sized, O>(
+    pub fn lower_bound<Q: ?Sized, C>(
         self,
-        order: &O,
+        context: &C,
         mut bound: SearchBound<&Q>,
     ) -> Handle<NodeRef<BorrowType, K, V, marker::Leaf>, marker::Edge>
     where
-        K: SortableByWithOrder<O>,
-        Q: SortableByWithOrder<O>,
-        O: TotalOrder,
+        K: ContextualBorrow<K, C> + ContextualBorrow<Q, C> + ContextualOrd<C>,
+        Q: ContextualOrd<C>,
     {
         let mut node = self;
         loop {
-            let (edge, new_bound) = node.find_lower_bound_edge(order, bound);
+            let (edge, new_bound) = node.find_lower_bound_edge(context, bound);
             match edge.force() {
                 Leaf(edge) => return edge,
                 Internal(edge) => {
@@ -754,19 +750,18 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
 
     /// Returns the leaf edge corresponding to the last point at which the
     /// given bound is true.
-    pub fn upper_bound<Q: ?Sized, O>(
+    pub fn upper_bound<Q: ?Sized, C>(
         self,
-        order: &O,
+        context: &C,
         mut bound: SearchBound<&Q>,
     ) -> Handle<NodeRef<BorrowType, K, V, marker::Leaf>, marker::Edge>
     where
-        K: SortableByWithOrder<O>,
-        Q: SortableByWithOrder<O>,
-        O: TotalOrder,
+        K: ContextualBorrow<K, C> + ContextualBorrow<Q, C> + ContextualOrd<C>,
+        Q: ContextualOrd<C>,
     {
         let mut node = self;
         loop {
-            let (edge, new_bound) = node.find_upper_bound_edge(order, bound);
+            let (edge, new_bound) = node.find_upper_bound_edge(context, bound);
             match edge.force() {
                 Leaf(edge) => return edge,
                 Internal(edge) => {

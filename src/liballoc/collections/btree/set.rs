@@ -1,10 +1,6 @@
 // This is pretty much entirely stolen from TreeSet, since BTreeMap has an identical interface
 // to TreeMap
 
-use crate::{
-    default::{OrdStoredKey, OrdTotalOrder},
-    SortableBy, SortableByWithOrder, TotalOrder,
-};
 use alloc::vec::Vec;
 use core::cmp::Ordering::{self, Equal, Greater, Less};
 use core::cmp::{max, min};
@@ -12,14 +8,15 @@ use core::fmt::{self, Debug};
 use core::hash::{Hash, Hasher};
 use core::iter::{FromIterator, FusedIterator, Peekable};
 use core::mem::ManuallyDrop;
-use core::ops::{BitAnd, BitOr, BitXor, RangeBounds, Sub};
+use core::ops::{BitAnd, BitOr, BitXor, Deref, DerefMut, RangeBounds, Sub};
 
-use super::map::{BTreeMap, Keys, OrderMut};
+use super::map::{BTreeMap, Keys};
 use super::merge_iter::MergeIterInner;
 use super::set_val::SetValZST;
 use super::Recover;
 
 use crate::polyfill::*;
+use contextual_cmp::{borrow::ContextualBorrow, prelude::*};
 
 // FIXME(conventions): implement bounded iterators
 
@@ -28,17 +25,19 @@ use crate::polyfill::*;
 /// See [`BTreeMap`]'s documentation for a detailed discussion of this collection's performance
 /// benefits and drawbacks.
 ///
-/// It is a logic error for an item or total order to be modified in such a way that the item's
-/// ordering relative to any other item, as determined by that total order, changes while they
-/// are in the set. This is normally only possible through [`Cell`], [`RefCell`], global state,
-/// I/O, or unsafe code. The behavior resulting from such a logic error is not specified, but
-/// will be encapsulated to the `BTreeSet` that observed the logic error and not result in
-/// undefined behavior. This could include panics, incorrect results, aborts, memory leaks, and
-/// non-termination.
+/// It is a logic error for an item or runtime context to be modified (except via the [`context_mut`]
+/// method) in such a way that the item's ordering relative to any other item, as determined by that
+/// runtime context, changes while they are in the set. This is normally only possible through the
+/// [`context_mut_unchecked`] method, [`Cell`], [`RefCell`], global state, I/O, or unsafe code. The
+/// behavior resulting from such a logic error is not specified, but will be encapsulated to the
+/// `BTreeSet` that observed the logic error and not result in undefined behavior. This could include
+/// panics, incorrect results, aborts, memory leaks, and non-termination.
 ///
 /// Iterators returned by [`BTreeSet::iter`] produce their items in order, and take worst-case
 /// logarithmic and amortized constant time per item returned.
 ///
+/// [`context_mut`]: Self::context_mut
+/// [`context_mut_unchecked`]: Self::context_mut_unchecked
 /// [`Cell`]: core::cell::Cell
 /// [`RefCell`]: core::cell::RefCell
 ///
@@ -79,41 +78,33 @@ use crate::polyfill::*;
 ///
 /// let set = BTreeSet::from([1, 2, 3]);
 /// ```
-pub struct BTreeSet<
-    T,
-    O = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>,
-    A: Allocator + Clone = Global,
-> {
-    map: BTreeMap<T, SetValZST, O, A>,
+pub struct BTreeSet<T, C = NoContext, A: Allocator + Clone = Global> {
+    map: BTreeMap<T, SetValZST, C, A>,
 }
 
-impl<T: Hash, O, A: Allocator + Clone> Hash for BTreeSet<T, O, A> {
+impl<T: Hash, C, A: Allocator + Clone> Hash for BTreeSet<T, C, A> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.map.hash(state)
     }
 }
 
-impl<T: PartialEq, O, A: Allocator + Clone> PartialEq for BTreeSet<T, O, A> {
-    fn eq(&self, other: &BTreeSet<T, O, A>) -> bool {
-        self.map.eq(&other.map)
+impl<T: ContextualPartialEq<C>, C: Eq, A: Allocator + Clone> PartialEq for BTreeSet<T, C, A> {
+    fn eq(&self, other: &Self) -> bool {
+        self.map == other.map
     }
 }
 
-impl<T: Eq, O, A: Allocator + Clone> Eq for BTreeSet<T, O, A> {}
+impl<T: ContextualEq<C>, C: Eq, A: Allocator + Clone> Eq for BTreeSet<T, C, A> {}
 
-impl<T: PartialOrd, O, A: Allocator + Clone> PartialOrd for BTreeSet<T, O, A> {
-    fn partial_cmp(&self, other: &BTreeSet<T, O, A>) -> Option<Ordering> {
+impl<T: ContextualPartialOrd<C>, C: Eq, A: Allocator + Clone> PartialOrd for BTreeSet<T, C, A> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.map.partial_cmp(&other.map)
     }
 }
 
-impl<T: Ord, O, A: Allocator + Clone> Ord for BTreeSet<T, O, A> {
-    fn cmp(&self, other: &BTreeSet<T, O, A>) -> Ordering {
-        self.map.cmp(&other.map)
-    }
-}
+// copse::BTreeSet does not impl Ord because there is no relative ordering when self.map.context and other.map.context differ
 
-impl<T: Clone, O: Clone, A: Allocator + Clone> Clone for BTreeSet<T, O, A> {
+impl<T: Clone, C: Clone, A: Allocator + Clone> Clone for BTreeSet<T, C, A> {
     fn clone(&self) -> Self {
         BTreeSet { map: self.map.clone() }
     }
@@ -172,16 +163,11 @@ pub struct Range<'a, T: 'a> {
 /// [`difference`]: BTreeSet::difference
 #[must_use = "this returns the difference as an iterator, \
               without modifying either input set"]
-pub struct Difference<
-    'a,
-    T: 'a,
-    O = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>,
-    A: Allocator + Clone = Global,
-> {
-    inner: DifferenceInner<'a, T, O, A>,
-    order: &'a O,
+pub struct Difference<'a, T: 'a, C = NoContext, A: Allocator + Clone = Global> {
+    inner: DifferenceInner<'a, T, C, A>,
+    context: &'a C,
 }
-enum DifferenceInner<'a, T: 'a, O, A: Allocator + Clone> {
+enum DifferenceInner<'a, T: 'a, C, A: Allocator + Clone> {
     Stitch {
         // iterate all of `self` and some of `other`, spotting matches along the way
         self_iter: Iter<'a, T>,
@@ -190,13 +176,13 @@ enum DifferenceInner<'a, T: 'a, O, A: Allocator + Clone> {
     Search {
         // iterate `self`, look up in `other`
         self_iter: Iter<'a, T>,
-        other_set: &'a BTreeSet<T, O, A>,
+        other_set: &'a BTreeSet<T, C, A>,
     },
     Iterate(Iter<'a, T>), // simply produce all elements in `self`
 }
 
 // Explicit Debug impl necessary because of issue #26925
-impl<T: Debug, O: TotalOrder, A: Allocator + Clone> Debug for DifferenceInner<'_, T, O, A> {
+impl<T: Debug, C, A: Allocator + Clone> Debug for DifferenceInner<'_, T, C, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             DifferenceInner::Stitch { self_iter, other_iter } => f
@@ -214,7 +200,7 @@ impl<T: Debug, O: TotalOrder, A: Allocator + Clone> Debug for DifferenceInner<'_
     }
 }
 
-impl<T: fmt::Debug, O: TotalOrder, A: Allocator + Clone> fmt::Debug for Difference<'_, T, O, A> {
+impl<T: fmt::Debug, C, A: Allocator + Clone> fmt::Debug for Difference<'_, T, C, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Difference").field(&self.inner).finish()
     }
@@ -228,12 +214,9 @@ impl<T: fmt::Debug, O: TotalOrder, A: Allocator + Clone> fmt::Debug for Differen
 /// [`symmetric_difference`]: BTreeSet::symmetric_difference
 #[must_use = "this returns the difference as an iterator, \
               without modifying either input set"]
-pub struct SymmetricDifference<'a, T: 'a, O = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>>(
-    MergeIterInner<Iter<'a, T>>,
-    &'a O,
-);
+pub struct SymmetricDifference<'a, T: 'a, C = NoContext>(MergeIterInner<Iter<'a, T>>, &'a C);
 
-impl<T: fmt::Debug, O> fmt::Debug for SymmetricDifference<'_, T, O> {
+impl<T: fmt::Debug, C> fmt::Debug for SymmetricDifference<'_, T, C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("SymmetricDifference").field(&self.0).finish()
     }
@@ -247,16 +230,11 @@ impl<T: fmt::Debug, O> fmt::Debug for SymmetricDifference<'_, T, O> {
 /// [`intersection`]: BTreeSet::intersection
 #[must_use = "this returns the intersection as an iterator, \
               without modifying either input set"]
-pub struct Intersection<
-    'a,
-    T: 'a,
-    O = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>,
-    A: Allocator + Clone = Global,
-> {
-    inner: IntersectionInner<'a, T, O, A>,
-    order: &'a O,
+pub struct Intersection<'a, T: 'a, C = NoContext, A: Allocator + Clone = Global> {
+    inner: IntersectionInner<'a, T, C, A>,
+    context: &'a C,
 }
-enum IntersectionInner<'a, T: 'a, O, A: Allocator + Clone> {
+enum IntersectionInner<'a, T: 'a, C, A: Allocator + Clone> {
     Stitch {
         // iterate similarly sized sets jointly, spotting matches along the way
         a: Iter<'a, T>,
@@ -265,13 +243,13 @@ enum IntersectionInner<'a, T: 'a, O, A: Allocator + Clone> {
     Search {
         // iterate a small set, look up in the large set
         small_iter: Iter<'a, T>,
-        large_set: &'a BTreeSet<T, O, A>,
+        large_set: &'a BTreeSet<T, C, A>,
     },
     Answer(Option<&'a T>), // return a specific element or emptiness
 }
 
 // Explicit Debug impl necessary because of issue #26925
-impl<T: Debug, O: TotalOrder, A: Allocator + Clone> Debug for IntersectionInner<'_, T, O, A> {
+impl<T: Debug, C, A: Allocator + Clone> Debug for IntersectionInner<'_, T, C, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             IntersectionInner::Stitch { a, b } => {
@@ -287,7 +265,7 @@ impl<T: Debug, O: TotalOrder, A: Allocator + Clone> Debug for IntersectionInner<
     }
 }
 
-impl<T: Debug, O: TotalOrder, A: Allocator + Clone> Debug for Intersection<'_, T, O, A> {
+impl<T: Debug, C, A: Allocator + Clone> Debug for Intersection<'_, T, C, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Intersection").field(&self.inner).finish()
     }
@@ -301,12 +279,9 @@ impl<T: Debug, O: TotalOrder, A: Allocator + Clone> Debug for Intersection<'_, T
 /// [`union`]: BTreeSet::union
 #[must_use = "this returns the union as an iterator, \
               without modifying either input set"]
-pub struct Union<'a, T: 'a, O = OrdTotalOrder<<T as OrdStoredKey>::OrdKeyType>>(
-    MergeIterInner<Iter<'a, T>>,
-    &'a O,
-);
+pub struct Union<'a, T: 'a, C = NoContext>(MergeIterInner<Iter<'a, T>>, &'a C);
 
-impl<T: fmt::Debug, O> fmt::Debug for Union<'_, T, O> {
+impl<T: fmt::Debug, C> fmt::Debug for Union<'_, T, C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Union").field(&self.0).finish()
     }
@@ -320,58 +295,45 @@ impl<T: fmt::Debug, O> fmt::Debug for Union<'_, T, O> {
 // and it's a power of two to make that division cheap.
 const ITER_PERFORMANCE_TIPPING_SIZE_DIFF: usize = 16;
 
-impl<T, O> BTreeSet<T, O> {
-    /// Makes a new, empty `BTreeSet` ordered by the given `order`.
+impl<T, C> BTreeSet<T, C> {
+    /// Makes a new, empty `BTreeSet` ordered by the given `context`.
     ///
     /// Does not allocate anything on its own.
     ///
     /// # Examples
     ///
     /// ```
-    /// # use copse::{BTreeSet, SortableBy, TotalOrder};
-    /// # use std::cmp::Ordering;
-    /// #
-    /// // define a total order
+    /// use copse::{BTreeSet, contextual_cmp::contextual};
+    ///
+    /// // define a runtime context
     /// struct OrderByNthByte {
     ///     n: usize, // runtime state
     /// }
     ///
-    /// impl TotalOrder for OrderByNthByte {
-    ///     // etc
-    /// #     type OrderedType = [u8];
-    /// #     fn cmp(&self, this: &[u8], that: &[u8]) -> Ordering {
-    /// #         this.get(self.n).cmp(&that.get(self.n))
-    /// #     }
+    /// contextual! {
+    ///     fn cmp(&self, other: &[u8], context: &OrderByNthByte) -> Ordering {
+    ///         self.get(context.n).cmp(&other.get(context.n))
+    ///     }
+    ///     fn borrow(self: &str, _: &OrderByNthByte) -> &[u8], delegating cmp { self.as_bytes() }
+    ///     fn borrow(self: &String, _: &OrderByNthByte) -> &str, delegating cmp { self }
     /// }
     ///
-    /// // define lookup key types for collections sorted by our total order
-    /// # impl SortableBy<OrderByNthByte> for [u8] {
-    /// #     fn sort_key(&self) -> &[u8] { self }
-    /// # }
-    /// # impl SortableBy<OrderByNthByte> for str {
-    /// #     fn sort_key(&self) -> &[u8] { self.as_bytes() }
-    /// # }
-    /// impl SortableBy<OrderByNthByte> for String {
-    ///     // etc
-    /// #     fn sort_key(&self) -> &[u8] { SortableBy::<OrderByNthByte>::sort_key(self.as_str()) }
-    /// }
-    ///
-    /// // create a set using our total order
+    /// // create a set using our runtime context
     /// let mut set = BTreeSet::new(OrderByNthByte { n: 9 });
     ///
     /// // entries can now be inserted into the empty set
     /// assert!(set.insert("abcdefghij".to_string()));
     /// ```
     #[must_use]
-    pub const fn new(order: O) -> BTreeSet<T, O> {
-        BTreeSet { map: BTreeMap::new(order) }
+    pub const fn new(context: C) -> BTreeSet<T, C> {
+        BTreeSet { map: BTreeMap::new(context) }
     }
 }
 
-impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
+impl<T, C, A: Allocator + Clone> BTreeSet<T, C, A> {
     decorate_if! {
         if #[cfg(feature = "btreemap_alloc")] {
-            /// Makes a new `BTreeSet` with a reasonable choice of B ordered by the given `order`.
+            /// Makes a new `BTreeSet` with a reasonable choice of B ordered by the given `context`.
             ///
             /// # Examples
             ///
@@ -379,18 +341,18 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
             ///
             /// ```
             /// # #![feature(allocator_api)]
-            /// use copse::{BTreeSet, default::OrdTotalOrder};
+            /// use copse::{BTreeSet, contextual_cmp::NoContext};
             /// use std::alloc::Global;
             ///
-            /// let mut set = BTreeSet::<_>::new_in(OrdTotalOrder::default(), Global);
+            /// let mut set = BTreeSet::<_>::new_in(NoContext::default(), Global);
             ///
             /// // entries can now be inserted into the empty set
             /// set.insert("a".to_string());
             /// ```
             pub
         }
-        fn new_in(order: O, alloc: A) -> BTreeSet<T, O, A> {
-            BTreeSet { map: BTreeMap::new_in(order, alloc) }
+        fn new_in(context: C, alloc: A) -> BTreeSet<T, C, A> {
+            BTreeSet { map: BTreeMap::new_in(context, alloc) }
         }
     }
 
@@ -423,9 +385,8 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn range<K: ?Sized, R>(&self, range: R) -> Range<'_, T>
     where
-        K: SortableByWithOrder<O>,
-        T: SortableByWithOrder<O>,
-        O: TotalOrder,
+        K: ContextualOrd<C>,
+        T: ContextualOrd<C> + ContextualBorrow<K, C>,
         R: RangeBounds<K>,
     {
         Range { iter: self.map.range(range) }
@@ -451,10 +412,9 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// let diff: Vec<_> = a.difference(&b).cloned().collect();
     /// assert_eq!(diff, [1]);
     /// ```
-    pub fn difference<'a>(&'a self, other: &'a BTreeSet<T, O, A>) -> Difference<'a, T, O, A>
+    pub fn difference<'a>(&'a self, other: &'a BTreeSet<T, C, A>) -> Difference<'a, T, C, A>
     where
-        T: SortableByWithOrder<O>,
-        O: TotalOrder,
+        T: ContextualOrd<C>,
     {
         let (self_min, self_max) =
             if let (Some(self_min), Some(self_max)) = (self.first(), self.last()) {
@@ -462,7 +422,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
             } else {
                 return Difference {
                     inner: DifferenceInner::Iterate(self.iter()),
-                    order: &self.map.order,
+                    context: &self.map.context,
                 };
             };
         let (other_min, other_max) =
@@ -471,13 +431,13 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
             } else {
                 return Difference {
                     inner: DifferenceInner::Iterate(self.iter()),
-                    order: &self.map.order,
+                    context: &self.map.context,
                 };
             };
         Difference {
             inner: match (
-                self.map.order.cmp_any(self_min, other_max),
-                self.map.order.cmp_any(self_max, other_min),
+                self_min.contextual_cmp(other_max, &self.map.context),
+                self_max.contextual_cmp(other_min, &self.map.context),
             ) {
                 (Greater, _) | (_, Less) => DifferenceInner::Iterate(self.iter()),
                 (Equal, _) => {
@@ -498,7 +458,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
                     other_iter: other.iter().peekable(),
                 },
             },
-            order: &self.map.order,
+            context: &self.map.context,
         }
     }
 
@@ -524,13 +484,12 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn symmetric_difference<'a>(
         &'a self,
-        other: &'a BTreeSet<T, O, A>,
-    ) -> SymmetricDifference<'a, T, O>
+        other: &'a BTreeSet<T, C, A>,
+    ) -> SymmetricDifference<'a, T, C>
     where
-        T: SortableByWithOrder<O>,
-        O: TotalOrder,
+        T: ContextualOrd<C>,
     {
-        SymmetricDifference(MergeIterInner::new(self.iter(), other.iter()), &self.map.order)
+        SymmetricDifference(MergeIterInner::new(self.iter(), other.iter()), &self.map.context)
     }
 
     /// Visits the elements representing the intersection,
@@ -553,29 +512,32 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// let intersection: Vec<_> = a.intersection(&b).cloned().collect();
     /// assert_eq!(intersection, [2]);
     /// ```
-    pub fn intersection<'a>(&'a self, other: &'a BTreeSet<T, O, A>) -> Intersection<'a, T, O, A>
+    pub fn intersection<'a>(&'a self, other: &'a BTreeSet<T, C, A>) -> Intersection<'a, T, C, A>
     where
-        T: SortableByWithOrder<O>,
-        O: TotalOrder,
+        T: ContextualOrd<C>,
     {
-        let (self_min, self_max) = if let (Some(self_min), Some(self_max)) =
-            (self.first(), self.last())
-        {
-            (self_min, self_max)
-        } else {
-            return Intersection { inner: IntersectionInner::Answer(None), order: &self.map.order };
-        };
-        let (other_min, other_max) = if let (Some(other_min), Some(other_max)) =
-            (other.first(), other.last())
-        {
-            (other_min, other_max)
-        } else {
-            return Intersection { inner: IntersectionInner::Answer(None), order: &self.map.order };
-        };
+        let (self_min, self_max) =
+            if let (Some(self_min), Some(self_max)) = (self.first(), self.last()) {
+                (self_min, self_max)
+            } else {
+                return Intersection {
+                    inner: IntersectionInner::Answer(None),
+                    context: &self.map.context,
+                };
+            };
+        let (other_min, other_max) =
+            if let (Some(other_min), Some(other_max)) = (other.first(), other.last()) {
+                (other_min, other_max)
+            } else {
+                return Intersection {
+                    inner: IntersectionInner::Answer(None),
+                    context: &self.map.context,
+                };
+            };
         Intersection {
             inner: match (
-                self.map.order.cmp_any(self_min, other_max),
-                self.map.order.cmp_any(self_max, other_min),
+                self_min.contextual_cmp(other_max, &self.map.context),
+                self_max.contextual_cmp(other_min, &self.map.context),
             ) {
                 (Greater, _) | (_, Less) => IntersectionInner::Answer(None),
                 (Equal, _) => IntersectionInner::Answer(Some(self_min)),
@@ -588,7 +550,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
                 }
                 _ => IntersectionInner::Stitch { a: self.iter(), b: other.iter() },
             },
-            order: &self.map.order,
+            context: &self.map.context,
         }
     }
 
@@ -610,12 +572,11 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// let union: Vec<_> = a.union(&b).cloned().collect();
     /// assert_eq!(union, [1, 2]);
     /// ```
-    pub fn union<'a>(&'a self, other: &'a BTreeSet<T, O, A>) -> Union<'a, T, O>
+    pub fn union<'a>(&'a self, other: &'a BTreeSet<T, C, A>) -> Union<'a, T, C>
     where
-        T: SortableByWithOrder<O>,
-        O: TotalOrder,
+        T: ContextualOrd<C>,
     {
-        Union(MergeIterInner::new(self.iter(), other.iter()), &self.map.order)
+        Union(MergeIterInner::new(self.iter(), other.iter()), &self.map.context)
     }
 
     /// Clears the set, removing all elements.
@@ -633,7 +594,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     pub fn clear(&mut self)
     where
         A: Clone,
-        O: Clone,
+        C: Clone,
     {
         self.map.clear()
     }
@@ -655,9 +616,8 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn contains<Q: ?Sized>(&self, value: &Q) -> bool
     where
-        T: SortableByWithOrder<O>,
-        Q: SortableByWithOrder<O>,
-        O: TotalOrder,
+        T: ContextualOrd<C> + ContextualBorrow<Q, C>,
+        Q: ContextualOrd<C>,
     {
         self.map.contains_key(value)
     }
@@ -680,9 +640,8 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn get<Q: ?Sized>(&self, value: &Q) -> Option<&T>
     where
-        T: SortableByWithOrder<O>,
-        Q: SortableByWithOrder<O>,
-        O: TotalOrder,
+        T: ContextualOrd<C> + ContextualBorrow<T, C> + ContextualBorrow<Q, C>,
+        Q: ContextualOrd<C>,
     {
         Recover::get(&self.map, value)
     }
@@ -705,10 +664,9 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// assert_eq!(a.is_disjoint(&b), false);
     /// ```
     #[must_use]
-    pub fn is_disjoint(&self, other: &BTreeSet<T, O, A>) -> bool
+    pub fn is_disjoint(&self, other: &BTreeSet<T, C, A>) -> bool
     where
-        T: SortableByWithOrder<O>,
-        O: TotalOrder,
+        T: ContextualBorrow<T, C> + ContextualOrd<C>,
     {
         self.intersection(other).next().is_none()
     }
@@ -731,10 +689,9 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// assert_eq!(set.is_subset(&sup), false);
     /// ```
     #[must_use]
-    pub fn is_subset(&self, other: &BTreeSet<T, O, A>) -> bool
+    pub fn is_subset(&self, other: &BTreeSet<T, C, A>) -> bool
     where
-        T: SortableByWithOrder<O>,
-        O: TotalOrder,
+        T: ContextualBorrow<T, C> + ContextualOrd<C>,
     {
         // Same result as self.difference(other).next().is_none()
         // but the code below is faster (hugely in some cases).
@@ -754,14 +711,14 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
                 return false; // other is empty
             };
         let mut self_iter = self.iter();
-        match self.map.order.cmp_any(self_min, other_min) {
+        match self_min.contextual_cmp(other_min, &self.map.context) {
             Less => return false,
             Equal => {
                 self_iter.next();
             }
             Greater => (),
         }
-        match self.map.order.cmp_any(self_max, other_max) {
+        match self_max.contextual_cmp(other_max, &self.map.context) {
             Greater => return false,
             Equal => {
                 self_iter.next_back();
@@ -780,7 +737,9 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
             other_iter.next_back();
             let mut self_next = self_iter.next();
             while let Some(self1) = self_next {
-                match other_iter.next().map_or(Less, |other1| self.map.order.cmp_any(self1, other1))
+                match other_iter
+                    .next()
+                    .map_or(Less, |other1| self1.contextual_cmp(other1, &self.map.context))
                 {
                     Less => return false,
                     Equal => self_next = self_iter.next(),
@@ -812,10 +771,9 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// assert_eq!(set.is_superset(&sub), true);
     /// ```
     #[must_use]
-    pub fn is_superset(&self, other: &BTreeSet<T, O, A>) -> bool
+    pub fn is_superset(&self, other: &BTreeSet<T, C, A>) -> bool
     where
-        T: SortableByWithOrder<O>,
-        O: TotalOrder,
+        T: ContextualBorrow<T, C> + ContextualOrd<C>,
     {
         other.is_subset(self)
     }
@@ -840,8 +798,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     #[must_use]
     pub fn first(&self) -> Option<&T>
     where
-        T: SortableByWithOrder<O>,
-        O: TotalOrder,
+        T: ContextualOrd<C>,
     {
         self.map.first_key_value().map(|(k, _)| k)
     }
@@ -866,8 +823,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     #[must_use]
     pub fn last(&self) -> Option<&T>
     where
-        T: SortableByWithOrder<O>,
-        O: TotalOrder,
+        T: ContextualOrd<C>,
     {
         self.map.last_key_value().map(|(k, _)| k)
     }
@@ -890,8 +846,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn pop_first(&mut self) -> Option<T>
     where
-        T: SortableByWithOrder<O>,
-        O: TotalOrder,
+        T: ContextualOrd<C>,
     {
         self.map.pop_first().map(|kv| kv.0)
     }
@@ -914,8 +869,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn pop_last(&mut self) -> Option<T>
     where
-        T: SortableByWithOrder<O>,
-        O: TotalOrder,
+        T: ContextualOrd<C>,
     {
         self.map.pop_last().map(|kv| kv.0)
     }
@@ -946,8 +900,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn insert(&mut self, value: T) -> bool
     where
-        T: SortableByWithOrder<O>,
-        O: TotalOrder,
+        T: ContextualBorrow<T, C> + ContextualOrd<C>,
     {
         self.map.insert(value, SetValZST::default()).is_none()
     }
@@ -969,8 +922,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn replace(&mut self, value: T) -> Option<T>
     where
-        T: SortableByWithOrder<O>,
-        O: TotalOrder,
+        T: ContextualBorrow<T, C> + ContextualOrd<C>,
     {
         Recover::<T>::replace(&mut self.map, value)
     }
@@ -995,9 +947,8 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn remove<Q: ?Sized>(&mut self, value: &Q) -> bool
     where
-        T: SortableByWithOrder<O>,
-        Q: SortableByWithOrder<O>,
-        O: TotalOrder,
+        T: ContextualOrd<C> + ContextualBorrow<Q, C>,
+        Q: ContextualOrd<C>,
     {
         self.map.remove(value).is_some()
     }
@@ -1020,9 +971,8 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn take<Q: ?Sized>(&mut self, value: &Q) -> Option<T>
     where
-        T: SortableByWithOrder<O>,
-        Q: SortableByWithOrder<O>,
-        O: TotalOrder,
+        T: ContextualOrd<C> + ContextualBorrow<T, C> + ContextualBorrow<Q, C>,
+        Q: ContextualOrd<C>,
     {
         Recover::take(&mut self.map, value)
     }
@@ -1044,8 +994,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn retain<F>(&mut self, mut f: F)
     where
-        T: SortableByWithOrder<O>,
-        O: TotalOrder,
+        T: ContextualOrd<C>,
         F: FnMut(&T) -> bool,
     {
         self.drain_filter(|v| !f(v));
@@ -1081,8 +1030,8 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// ```
     pub fn append(&mut self, other: &mut Self)
     where
-        T: SortableByWithOrder<O>,
-        O: Clone + TotalOrder,
+        T: ContextualOrd<C>,
+        C: Clone,
         A: Clone,
     {
         self.map.append(&mut other.map);
@@ -1117,10 +1066,10 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
     /// assert!(b.contains(&17));
     /// assert!(b.contains(&41));
     /// ```
-    pub fn split_off<Q: ?Sized + SortableByWithOrder<O>>(&mut self, value: &Q) -> Self
+    pub fn split_off<Q: ?Sized + ContextualOrd<C>>(&mut self, value: &Q) -> Self
     where
-        T: SortableByWithOrder<O>,
-        O: TotalOrder + Clone,
+        T: ContextualOrd<C> + ContextualBorrow<Q, C>,
+        C: Clone,
         A: Clone,
     {
         BTreeSet { map: self.map.split_off(value) }
@@ -1160,8 +1109,7 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
         }
         fn drain_filter<'a, F>(&'a mut self, pred: F) -> DrainFilter<'a, T, F, A>
         where
-            T: SortableByWithOrder<O>,
-            O: TotalOrder,
+            T: ContextualOrd<C>,
             F: 'a + FnMut(&T) -> bool,
         {
             let (inner, alloc) = self.map.drain_filter_inner();
@@ -1242,10 +1190,70 @@ impl<T, O, A: Allocator + Clone> BTreeSet<T, O, A> {
             self.len() == 0
         }
     }
+
+    /// Borrow this set's context.
+    pub fn context(&self) -> &C {
+        self.map.context()
+    }
+
+    /// Mutably borrow this set's context.  When the returned guard is dropped, the
+    /// set will be rebuilt.
+    pub fn context_mut(&mut self) -> ContextMut<'_, T, C, A>
+    where
+        T: ContextualBorrow<T, C> + ContextualOrd<C>,
+    {
+        ContextMut(self.map.context_mut())
+    }
+
+    /// Mutably borrow this set's context.  It is a logic error for the context to be
+    /// modified in a way that changes the relative ordering of any two items contained
+    /// in the set.  The behavior resulting from such a logic error is not specified,
+    /// but will be encapsulated to the `BTreeSet` that observed the logic error and
+    /// not result in undefined behavior. This could include panics, incorrect results,
+    /// aborts, memory leaks, and non-termination.
+    ///
+    /// If the context might be modified in such a way, consider using [`context_mut`]
+    /// instead, which will reorder the set once the guard is dropped so as to uphold
+    /// its invariants.
+    ///
+    /// [`context_mut`]: Self::context_mut
+    pub fn context_mut_unchecked(&mut self) -> &mut C {
+        self.map.context_mut_unchecked()
+    }
 }
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder + Default> FromIterator<T> for BTreeSet<T, O> {
-    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> BTreeSet<T, O> {
+/// A guard for mutably accessing a `BTreeSet`'s context.  When the guard is dropped,
+/// the set will be rebuilt.
+pub struct ContextMut<'a, T, C = NoContext, A = Global>(
+    super::map::ContextMut<'a, T, SetValZST, C, A>,
+)
+where
+    T: ContextualBorrow<T, C> + ContextualOrd<C>,
+    A: Allocator + Clone;
+
+impl<K, C, A> Deref for ContextMut<'_, K, C, A>
+where
+    K: ContextualBorrow<K, C> + ContextualOrd<C>,
+    A: Allocator + Clone,
+{
+    type Target = C;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<K, C, A> DerefMut for ContextMut<'_, K, C, A>
+where
+    K: ContextualBorrow<K, C> + ContextualOrd<C>,
+    A: Allocator + Clone,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<T: ContextualBorrow<T, C> + ContextualOrd<C>, C: Default> FromIterator<T> for BTreeSet<T, C> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> BTreeSet<T, C> {
         let mut inputs: Vec<_> = iter.into_iter().collect();
 
         if inputs.is_empty() {
@@ -1253,38 +1261,21 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder + Default> FromIterator<T> for BTr
         }
 
         // use stable sort to preserve the insertion order.
-        let order = O::default();
-        inputs.sort_by(|a, b| order.cmp_any(a, b));
-        BTreeSet::from_sorted_iter(inputs.into_iter(), order, Global)
+        let context = C::default();
+        inputs.sort_by(|a, b| a.contextual_cmp(b, &context));
+        BTreeSet::from_sorted_iter(inputs.into_iter(), context, Global)
     }
 }
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder, A: Allocator + Clone> BTreeSet<T, O, A> {
-    fn from_sorted_iter<I: Iterator<Item = T>>(iter: I, order: O, alloc: A) -> BTreeSet<T, O, A> {
+impl<T: ContextualBorrow<T, C> + ContextualOrd<C>, C, A: Allocator + Clone> BTreeSet<T, C, A> {
+    fn from_sorted_iter<I: Iterator<Item = T>>(iter: I, context: C, alloc: A) -> BTreeSet<T, C, A> {
         let iter = iter.map(|k| (k, SetValZST::default()));
-        let map = BTreeMap::bulk_build_from_sorted_iter(iter, order, alloc);
+        let map = BTreeMap::bulk_build_from_sorted_iter(iter, context, alloc);
         BTreeSet { map }
     }
-
-    #[doc(hidden)]
-    pub fn get_order(&self) -> &O {
-        self.map.get_order()
-    }
-
-    #[doc(hidden)]
-    pub fn get_mut_order(&mut self) -> OrderMut<'_, T, SetValZST, O, A> {
-        self.map.get_mut_order()
-    }
-
-    #[doc(hidden)]
-    pub fn get_mut_order_unchecked(&mut self) -> &mut O {
-        self.map.get_mut_order_unchecked()
-    }
 }
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder + Default, const N: usize> From<[T; N]>
-    for BTreeSet<T, O>
-{
+impl<T: ContextualOrd<C>, C: Default, const N: usize> From<[T; N]> for BTreeSet<T, C> {
     /// Converts a `[T; N]` into a `BTreeSet<T>`.
     ///
     /// ```
@@ -1300,15 +1291,15 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder + Default, const N: usize> From<[T
         }
 
         // use stable sort to preserve the insertion order.
-        let order = O::default();
-        arr.sort_by(|a, b| order.cmp_any(a, b));
+        let context = C::default();
+        arr.sort_by(|a, b| a.contextual_cmp(b, &context));
         let iter = IntoIterator::into_iter(arr).map(|k| (k, SetValZST::default()));
-        let map = BTreeMap::bulk_build_from_sorted_iter(iter, order, Global);
+        let map = BTreeMap::bulk_build_from_sorted_iter(iter, context, Global);
         BTreeSet { map }
     }
 }
 
-impl<T, O, A: Allocator + Clone> IntoIterator for BTreeSet<T, O, A> {
+impl<T, C, A: Allocator + Clone> IntoIterator for BTreeSet<T, C, A> {
     type Item = T;
     type IntoIter = IntoIter<T, A>;
 
@@ -1329,7 +1320,7 @@ impl<T, O, A: Allocator + Clone> IntoIterator for BTreeSet<T, O, A> {
     }
 }
 
-impl<'a, T, O: TotalOrder, A: Allocator + Clone> IntoIterator for &'a BTreeSet<T, O, A> {
+impl<'a, T, C, A: Allocator + Clone> IntoIterator for &'a BTreeSet<T, C, A> {
     type Item = &'a T;
     type IntoIter = Iter<'a, T>;
 
@@ -1394,8 +1385,8 @@ impl<T, F, A: Allocator + Clone> FusedIterator for DrainFilter<'_, T, F, A> wher
 {
 }
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder, A: Allocator + Clone> Extend<T>
-    for BTreeSet<T, O, A>
+impl<T: ContextualBorrow<T, C> + ContextualOrd<C>, C, A: Allocator + Clone> Extend<T>
+    for BTreeSet<T, C, A>
 {
     #[inline]
     fn extend<Iter: IntoIterator<Item = T>>(&mut self, iter: Iter) {
@@ -1411,8 +1402,8 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder, A: Allocator + Clone> Extend<T>
     }
 }
 
-impl<'a, T: 'a + SortableByWithOrder<O> + Copy, O: TotalOrder, A: Allocator + Clone> Extend<&'a T>
-    for BTreeSet<T, O, A>
+impl<'a, T: 'a + ContextualBorrow<T, C> + ContextualOrd<C> + Copy, C, A: Allocator + Clone>
+    Extend<&'a T> for BTreeSet<T, C, A>
 {
     fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
         self.extend(iter.into_iter().cloned());
@@ -1425,17 +1416,17 @@ impl<'a, T: 'a + SortableByWithOrder<O> + Copy, O: TotalOrder, A: Allocator + Cl
     }
 }
 
-impl<T, O: Default> Default for BTreeSet<T, O> {
+impl<T, C: Default> Default for BTreeSet<T, C> {
     /// Creates an empty `BTreeSet` ordered by the `Ord` trait.
-    fn default() -> BTreeSet<T, O> {
-        BTreeSet::new(O::default())
+    fn default() -> BTreeSet<T, C> {
+        BTreeSet::new(C::default())
     }
 }
 
-impl<T: SortableByWithOrder<O> + Clone, O: TotalOrder + Clone, A: Allocator + Clone>
-    Sub<&BTreeSet<T, O, A>> for &BTreeSet<T, O, A>
+impl<T: ContextualBorrow<T, C> + ContextualOrd<C> + Clone, C: Clone, A: Allocator + Clone>
+    Sub<&BTreeSet<T, C, A>> for &BTreeSet<T, C, A>
 {
-    type Output = BTreeSet<T, O, A>;
+    type Output = BTreeSet<T, C, A>;
 
     /// Returns the difference of `self` and `rhs` as a new `BTreeSet<T>`.
     ///
@@ -1450,19 +1441,19 @@ impl<T: SortableByWithOrder<O> + Clone, O: TotalOrder + Clone, A: Allocator + Cl
     /// let result = &a - &b;
     /// assert_eq!(result, BTreeSet::from([1, 2]));
     /// ```
-    fn sub(self, rhs: &BTreeSet<T, O, A>) -> BTreeSet<T, O, A> {
+    fn sub(self, rhs: &BTreeSet<T, C, A>) -> BTreeSet<T, C, A> {
         BTreeSet::from_sorted_iter(
             self.difference(rhs).cloned(),
-            self.map.order.clone(),
+            self.map.context.clone(),
             ManuallyDrop::into_inner(self.map.alloc.clone()),
         )
     }
 }
 
-impl<T: SortableByWithOrder<O> + Clone, O: TotalOrder + Clone, A: Allocator + Clone>
-    BitXor<&BTreeSet<T, O, A>> for &BTreeSet<T, O, A>
+impl<T: ContextualBorrow<T, C> + ContextualOrd<C> + Clone, C: Clone, A: Allocator + Clone>
+    BitXor<&BTreeSet<T, C, A>> for &BTreeSet<T, C, A>
 {
-    type Output = BTreeSet<T, O, A>;
+    type Output = BTreeSet<T, C, A>;
 
     /// Returns the symmetric difference of `self` and `rhs` as a new `BTreeSet<T>`.
     ///
@@ -1477,19 +1468,19 @@ impl<T: SortableByWithOrder<O> + Clone, O: TotalOrder + Clone, A: Allocator + Cl
     /// let result = &a ^ &b;
     /// assert_eq!(result, BTreeSet::from([1, 4]));
     /// ```
-    fn bitxor(self, rhs: &BTreeSet<T, O, A>) -> BTreeSet<T, O, A> {
+    fn bitxor(self, rhs: &BTreeSet<T, C, A>) -> BTreeSet<T, C, A> {
         BTreeSet::from_sorted_iter(
             self.symmetric_difference(rhs).cloned(),
-            self.map.order.clone(),
+            self.map.context.clone(),
             ManuallyDrop::into_inner(self.map.alloc.clone()),
         )
     }
 }
 
-impl<T: SortableByWithOrder<O> + Clone, O: TotalOrder + Clone, A: Allocator + Clone>
-    BitAnd<&BTreeSet<T, O, A>> for &BTreeSet<T, O, A>
+impl<T: ContextualBorrow<T, C> + ContextualOrd<C> + Clone, C: Clone, A: Allocator + Clone>
+    BitAnd<&BTreeSet<T, C, A>> for &BTreeSet<T, C, A>
 {
-    type Output = BTreeSet<T, O, A>;
+    type Output = BTreeSet<T, C, A>;
 
     /// Returns the intersection of `self` and `rhs` as a new `BTreeSet<T>`.
     ///
@@ -1504,19 +1495,19 @@ impl<T: SortableByWithOrder<O> + Clone, O: TotalOrder + Clone, A: Allocator + Cl
     /// let result = &a & &b;
     /// assert_eq!(result, BTreeSet::from([2, 3]));
     /// ```
-    fn bitand(self, rhs: &BTreeSet<T, O, A>) -> BTreeSet<T, O, A> {
+    fn bitand(self, rhs: &BTreeSet<T, C, A>) -> BTreeSet<T, C, A> {
         BTreeSet::from_sorted_iter(
             self.intersection(rhs).cloned(),
-            self.map.order.clone(),
+            self.map.context.clone(),
             ManuallyDrop::into_inner(self.map.alloc.clone()),
         )
     }
 }
 
-impl<T: SortableByWithOrder<O> + Clone, O: TotalOrder + Clone, A: Allocator + Clone>
-    BitOr<&BTreeSet<T, O, A>> for &BTreeSet<T, O, A>
+impl<T: ContextualBorrow<T, C> + ContextualOrd<C> + Clone, C: Clone, A: Allocator + Clone>
+    BitOr<&BTreeSet<T, C, A>> for &BTreeSet<T, C, A>
 {
-    type Output = BTreeSet<T, O, A>;
+    type Output = BTreeSet<T, C, A>;
 
     /// Returns the union of `self` and `rhs` as a new `BTreeSet<T>`.
     ///
@@ -1531,16 +1522,16 @@ impl<T: SortableByWithOrder<O> + Clone, O: TotalOrder + Clone, A: Allocator + Cl
     /// let result = &a | &b;
     /// assert_eq!(result, BTreeSet::from([1, 2, 3, 4, 5]));
     /// ```
-    fn bitor(self, rhs: &BTreeSet<T, O, A>) -> BTreeSet<T, O, A> {
+    fn bitor(self, rhs: &BTreeSet<T, C, A>) -> BTreeSet<T, C, A> {
         BTreeSet::from_sorted_iter(
             self.union(rhs).cloned(),
-            self.map.order.clone(),
+            self.map.context.clone(),
             ManuallyDrop::into_inner(self.map.alloc.clone()),
         )
     }
 }
 
-impl<T: Debug, O, A: Allocator + Clone> Debug for BTreeSet<T, O, A> {
+impl<T: Debug, C, A: Allocator + Clone> Debug for BTreeSet<T, C, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_set().entries(self.iter()).finish()
     }
@@ -1645,7 +1636,7 @@ impl<'a, T> DoubleEndedIterator for Range<'a, T> {
 
 impl<T> FusedIterator for Range<'_, T> {}
 
-impl<T, O, A: Allocator + Clone> Clone for Difference<'_, T, O, A> {
+impl<T, C, A: Allocator + Clone> Clone for Difference<'_, T, C, A> {
     fn clone(&self) -> Self {
         Difference {
             inner: match &self.inner {
@@ -1658,12 +1649,12 @@ impl<T, O, A: Allocator + Clone> Clone for Difference<'_, T, O, A> {
                 }
                 DifferenceInner::Iterate(iter) => DifferenceInner::Iterate(iter.clone()),
             },
-            order: self.order,
+            context: self.context,
         }
     }
 }
-impl<'a, T: SortableByWithOrder<O>, O: TotalOrder, A: Allocator + Clone> Iterator
-    for Difference<'a, T, O, A>
+impl<'a, T: ContextualBorrow<T, C> + ContextualOrd<C>, C, A: Allocator + Clone> Iterator
+    for Difference<'a, T, C, A>
 {
     type Item = &'a T;
 
@@ -1672,10 +1663,9 @@ impl<'a, T: SortableByWithOrder<O>, O: TotalOrder, A: Allocator + Clone> Iterato
             DifferenceInner::Stitch { self_iter, other_iter } => {
                 let mut self_next = self_iter.next()?;
                 loop {
-                    match other_iter
-                        .peek()
-                        .map_or(Less, |&other_next| self.order.cmp_any(self_next, other_next))
-                    {
+                    match other_iter.peek().map_or(Less, |&other_next| {
+                        self_next.contextual_cmp(other_next, &self.context)
+                    }) {
                         Less => return Some(self_next),
                         Equal => {
                             self_next = self_iter.next()?;
@@ -1713,22 +1703,22 @@ impl<'a, T: SortableByWithOrder<O>, O: TotalOrder, A: Allocator + Clone> Iterato
     }
 }
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder, A: Allocator + Clone> FusedIterator
-    for Difference<'_, T, O, A>
+impl<T: ContextualBorrow<T, C> + ContextualOrd<C>, C, A: Allocator + Clone> FusedIterator
+    for Difference<'_, T, C, A>
 {
 }
 
-impl<T, O> Clone for SymmetricDifference<'_, T, O> {
+impl<T, C> Clone for SymmetricDifference<'_, T, C> {
     fn clone(&self) -> Self {
         SymmetricDifference(self.0.clone(), self.1)
     }
 }
-impl<'a, T: SortableByWithOrder<O>, O: TotalOrder> Iterator for SymmetricDifference<'a, T, O> {
+impl<'a, T: ContextualOrd<C>, C> Iterator for SymmetricDifference<'a, T, C> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
         loop {
-            let (a_next, b_next) = self.0.nexts(|&a, &b| self.1.cmp_any(a, b));
+            let (a_next, b_next) = self.0.nexts(|&a, &b| a.contextual_cmp(b, &self.1));
             if a_next.and(b_next).is_none() {
                 return a_next.or(b_next);
             }
@@ -1748,9 +1738,9 @@ impl<'a, T: SortableByWithOrder<O>, O: TotalOrder> Iterator for SymmetricDiffere
     }
 }
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder> FusedIterator for SymmetricDifference<'_, T, O> {}
+impl<T: ContextualOrd<C>, C> FusedIterator for SymmetricDifference<'_, T, C> {}
 
-impl<T, O: Clone, A: Allocator + Clone> Clone for Intersection<'_, T, O, A> {
+impl<T, C: Clone, A: Allocator + Clone> Clone for Intersection<'_, T, C, A> {
     fn clone(&self) -> Self {
         Intersection {
             inner: match &self.inner {
@@ -1762,12 +1752,12 @@ impl<T, O: Clone, A: Allocator + Clone> Clone for Intersection<'_, T, O, A> {
                 }
                 IntersectionInner::Answer(answer) => IntersectionInner::Answer(*answer),
             },
-            order: self.order,
+            context: self.context,
         }
     }
 }
-impl<'a, T: SortableByWithOrder<O>, O: TotalOrder, A: Allocator + Clone> Iterator
-    for Intersection<'a, T, O, A>
+impl<'a, T: ContextualBorrow<T, C> + ContextualOrd<C>, C, A: Allocator + Clone> Iterator
+    for Intersection<'a, T, C, A>
 {
     type Item = &'a T;
 
@@ -1777,7 +1767,7 @@ impl<'a, T: SortableByWithOrder<O>, O: TotalOrder, A: Allocator + Clone> Iterato
                 let mut a_next = a.next()?;
                 let mut b_next = b.next()?;
                 loop {
-                    match self.order.cmp_any(a_next, b_next) {
+                    match a_next.contextual_cmp(b_next, &self.context) {
                         Less => a_next = a.next()?,
                         Greater => b_next = b.next()?,
                         Equal => return Some(a_next),
@@ -1808,21 +1798,21 @@ impl<'a, T: SortableByWithOrder<O>, O: TotalOrder, A: Allocator + Clone> Iterato
     }
 }
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder, A: Allocator + Clone> FusedIterator
-    for Intersection<'_, T, O, A>
+impl<T: ContextualBorrow<T, C> + ContextualOrd<C>, C, A: Allocator + Clone> FusedIterator
+    for Intersection<'_, T, C, A>
 {
 }
 
-impl<T, O> Clone for Union<'_, T, O> {
+impl<T, C> Clone for Union<'_, T, C> {
     fn clone(&self) -> Self {
         Union(self.0.clone(), self.1)
     }
 }
-impl<'a, T: SortableByWithOrder<O>, O: TotalOrder> Iterator for Union<'a, T, O> {
+impl<'a, T: ContextualOrd<C>, C> Iterator for Union<'a, T, C> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
-        let (a_next, b_next) = self.0.nexts(|&a, &b| self.1.cmp_any(a, b));
+        let (a_next, b_next) = self.0.nexts(|&a, &b| a.contextual_cmp(b, &self.1));
         a_next.or(b_next)
     }
 
@@ -1837,7 +1827,7 @@ impl<'a, T: SortableByWithOrder<O>, O: TotalOrder> Iterator for Union<'a, T, O> 
     }
 }
 
-impl<T: SortableByWithOrder<O>, O: TotalOrder> FusedIterator for Union<'_, T, O> {}
+impl<T: ContextualOrd<C>, C> FusedIterator for Union<'_, T, C> {}
 
 #[cfg(test)]
 mod tests;

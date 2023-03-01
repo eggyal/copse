@@ -1,0 +1,16 @@
+[package]
+name = "contextual_cmp"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/eggyal/copse.git"
+description = "Direct ports of the standard library's comparison and borrowing traits, but whose methods additionally accept a context value of custom type"
+edition = "2021"
+keywords = ["borrow", "comparison", "iterator", "context", "runtime"]
+categories = ["data-structures", "no-std"]
+
+[features]
+is_sorted = []
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

@@ -1,7 +1,7 @@
 use super::node::{ForceResult::*, Root};
 use super::search::SearchResult::*;
 use crate::polyfill::*;
-use crate::{SortableByWithOrder, TotalOrder};
+use contextual_cmp::{borrow::ContextualBorrow, cmp::ContextualOrd};
 
 impl<K, V> Root<K, V> {
     /// Calculates the length of both trees that result from splitting up
@@ -29,16 +29,15 @@ impl<K, V> Root<K, V> {
     /// and if the ordering of `Q` corresponds to that of `K`.
     /// If `self` respects all `BTreeMap` tree invariants, then both
     /// `self` and the returned tree will respect those invariants.
-    pub fn split_off<Q: ?Sized, A: Allocator + Clone, O>(
+    pub fn split_off<Q: ?Sized, A: Allocator + Clone, C>(
         &mut self,
         key: &Q,
-        order: &O,
+        context: &C,
         alloc: A,
     ) -> Self
     where
-        K: SortableByWithOrder<O>,
-        Q: SortableByWithOrder<O>,
-        O: TotalOrder,
+        K: ContextualOrd<C> + ContextualBorrow<Q, C>,
+        Q: ContextualOrd<C>,
     {
         let left_root = self;
         let mut right_root = Root::new_pillar(left_root.height(), alloc.clone());
@@ -46,7 +45,7 @@ impl<K, V> Root<K, V> {
         let mut right_node = right_root.borrow_mut();
 
         loop {
-            let mut split_edge = match left_node.search_node(key, order) {
+            let mut split_edge = match left_node.search_node(key, context) {
                 // key is going to the right tree
                 Found(kv) => kv.left_edge(),
                 GoDown(edge) => edge,

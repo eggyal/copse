@@ -95,7 +95,6 @@ fn check_exact_size_iterator<I: ExactSizeIterator>(len: usize, it: I) {
         it.next();
     }
     assert_eq!(it.len(), 0);
-    #[cfg(feature = "exact_size_is_empty")]
     assert!(it.is_empty());
 }
 
@@ -273,19 +272,19 @@ fn test_in_place_iterator_specialization() {
 
 #[test]
 fn test_empty_pop() {
-    let mut heap = BinaryHeap::<i32>::default();
+    let mut heap = BinaryHeap::<i32>::new(NoContext);
     assert!(heap.pop().is_none());
 }
 
 #[test]
 fn test_empty_peek() {
-    let empty = BinaryHeap::<i32>::default();
+    let empty = BinaryHeap::<i32>::new(NoContext);
     assert!(empty.peek().is_none());
 }
 
 #[test]
 fn test_empty_peek_mut() {
-    let mut empty = BinaryHeap::<i32>::default();
+    let mut empty = BinaryHeap::<i32>::new(NoContext);
     assert!(empty.peek_mut().is_none());
 }
 
@@ -404,7 +403,7 @@ fn test_drain_sorted_forget() {
 
 #[test]
 fn test_extend_ref() {
-    let mut a = BinaryHeap::default();
+    let mut a = BinaryHeap::new(NoContext);
     a.push(1);
     a.push(2);
 
@@ -413,10 +412,10 @@ fn test_extend_ref() {
     assert_eq!(a.len(), 5);
     assert_eq!(a.into_sorted_vec(), [1, 2, 3, 4, 5]);
 
-    let mut a = BinaryHeap::default();
+    let mut a = BinaryHeap::new(NoContext);
     a.push(1);
     a.push(2);
-    let mut b = BinaryHeap::default();
+    let mut b = BinaryHeap::new(NoContext);
     b.push(3);
     b.push(4);
     b.push(5);
@@ -440,7 +439,7 @@ fn test_append() {
 
 #[test]
 fn test_append_to_empty() {
-    let mut a = BinaryHeap::default();
+    let mut a = BinaryHeap::new(NoContext);
     let mut b = BinaryHeap::from(vec![-20, 5, 43]);
 
     a.append(&mut b);

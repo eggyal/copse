@@ -1,8 +1,8 @@
-use crate::{SortableByWithOrder, TotalOrder};
 use core::cmp::Ordering;
 use core::ops::{Bound, RangeBounds};
 
 use super::node::{marker, ForceResult::*, Handle, NodeRef};
+use contextual_cmp::{borrow::ContextualBorrow, cmp::ContextualOrd};
 
 use cfg_if::cfg_if;
 use SearchBound::*;
@@ -46,18 +46,17 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
     ///
     /// The result is meaningful only if the tree is ordered by key, like the tree
     /// in a `BTreeMap` is.
-    pub fn search_tree<Q: ?Sized, O>(
+    pub fn search_tree<Q: ?Sized, C>(
         mut self,
         key: &Q,
-        order: &O,
+        context: &C,
     ) -> SearchResult<BorrowType, K, V, marker::LeafOrInternal, marker::Leaf>
     where
-        K: SortableByWithOrder<O>,
-        Q: SortableByWithOrder<O>,
-        O: TotalOrder,
+        K: ContextualOrd<C> + ContextualBorrow<Q, C>,
+        Q: ContextualOrd<C>,
     {
         loop {
-            self = match self.search_node(key, order) {
+            self = match self.search_node(key, context) {
                 Found(handle) => return Found(handle),
                 GoDown(handle) => match handle.force() {
                     Leaf(leaf) => return GoDown(leaf),
@@ -82,9 +81,9 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
     /// As a diagnostic service, panics if the range specifies impossible bounds.
     ///
     /// The result is meaningful only if the tree is ordered by key.
-    pub fn search_tree_for_bifurcation<'r, Q: ?Sized, R, O>(
+    pub fn search_tree_for_bifurcation<'r, Q: ?Sized, R, C>(
         mut self,
-        order: &O,
+        context: &C,
         range: &'r R,
     ) -> Result<
         (
@@ -97,10 +96,9 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
         Handle<NodeRef<BorrowType, K, V, marker::Leaf>, marker::Edge>,
     >
     where
-        K: SortableByWithOrder<O>,
-        Q: SortableByWithOrder<O>,
+        K: ContextualOrd<C> + ContextualBorrow<Q, C>,
+        Q: ContextualOrd<C>,
         R: RangeBounds<Q>,
-        O: TotalOrder,
     {
         // Determine if map or set is being searched
         #[cfg(feature = "specialization")]
@@ -110,7 +108,7 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
         // remain the same, but an adversarial implementation could change between calls (#81138).
         let (start, end) = (range.start_bound(), range.end_bound());
         match (start, end) {
-            (Bound::Excluded(s), Bound::Excluded(e)) if order.eq(s, e) => {
+            (Bound::Excluded(s), Bound::Excluded(e)) if s.contextual_eq(e, context) => {
                 cfg_if! {
                     if #[cfg(feature = "specialization")] {
                         if is_set {
@@ -124,7 +122,7 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
                 }
             }
             (Bound::Included(s) | Bound::Excluded(s), Bound::Included(e) | Bound::Excluded(e))
-                if order.gt(s, e) =>
+                if s.contextual_gt(e, context) =>
             {
                 cfg_if! {
                     if #[cfg(feature = "specialization")] {
@@ -144,9 +142,9 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
         let mut upper_bound = SearchBound::from_range(end);
         loop {
             let (lower_edge_idx, lower_child_bound) =
-                self.find_lower_bound_index(order, lower_bound);
+                self.find_lower_bound_index(context, lower_bound);
             let (upper_edge_idx, upper_child_bound) =
-                unsafe { self.find_upper_bound_index(order, upper_bound, lower_edge_idx) };
+                unsafe { self.find_upper_bound_index(context, upper_bound, lower_edge_idx) };
             if lower_edge_idx < upper_edge_idx {
                 return Ok((
                     self,
@@ -174,33 +172,31 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, marker::Lea
     /// the matching child node, if `self` is an internal node.
     ///
     /// The result is meaningful only if the tree is ordered by key.
-    pub fn find_lower_bound_edge<'r, Q, O>(
+    pub fn find_lower_bound_edge<'r, Q, C>(
         self,
-        order: &O,
+        context: &C,
         bound: SearchBound<&'r Q>,
     ) -> (Handle<Self, marker::Edge>, SearchBound<&'r Q>)
     where
-        K: SortableByWithOrder<O>,
-        Q: ?Sized + SortableByWithOrder<O>,
-        O: TotalOrder,
+        K: ContextualOrd<C> + ContextualBorrow<Q, C>,
+        Q: ?Sized + ContextualOrd<C>,
     {
-        let (edge_idx, bound) = self.find_lower_bound_index(order, bound);
+        let (edge_idx, bound) = self.find_lower_bound_index(context, bound);
         let edge = unsafe { Handle::new_edge(self, edge_idx) };
         (edge, bound)
     }
 
     /// Clone of `find_lower_bound_edge` for the upper bound.
-    pub fn find_upper_bound_edge<'r, Q, O>(
+    pub fn find_upper_bound_edge<'r, Q, C>(
         self,
-        order: &O,
+        context: &C,
         bound: SearchBound<&'r Q>,
     ) -> (Handle<Self, marker::Edge>, SearchBound<&'r Q>)
     where
-        K: SortableByWithOrder<O>,
-        Q: ?Sized + SortableByWithOrder<O>,
-        O: TotalOrder,
+        K: ContextualOrd<C> + ContextualBorrow<Q, C>,
+        Q: ?Sized + ContextualOrd<C>,
     {
-        let (edge_idx, bound) = unsafe { self.find_upper_bound_index(order, bound, 0) };
+        let (edge_idx, bound) = unsafe { self.find_upper_bound_index(context, bound, 0) };
         let edge = unsafe { Handle::new_edge(self, edge_idx) };
         (edge, bound)
     }
@@ -214,17 +210,16 @@ impl<BorrowType, K, V, Type> NodeRef<BorrowType, K, V, Type> {
     ///
     /// The result is meaningful only if the tree is ordered by key, like the tree
     /// in a `BTreeMap` is.
-    pub fn search_node<Q: ?Sized, O>(
+    pub fn search_node<Q: ?Sized, C>(
         self,
         key: &Q,
-        order: &O,
+        context: &C,
     ) -> SearchResult<BorrowType, K, V, Type, Type>
     where
-        K: SortableByWithOrder<O>,
-        Q: SortableByWithOrder<O>,
-        O: TotalOrder,
+        K: ContextualOrd<C> + ContextualBorrow<Q, C>,
+        Q: ContextualOrd<C>,
     {
-        match unsafe { self.find_key_index(key, order, 0) } {
+        match unsafe { self.find_key_index(key, context, 0) } {
             IndexResult::KV(idx) => Found(unsafe { Handle::new_kv(self, idx) }),
             IndexResult::Edge(idx) => GoDown(unsafe { Handle::new_edge(self, idx) }),
         }
@@ -238,22 +233,21 @@ impl<BorrowType, K, V, Type> NodeRef<BorrowType, K, V, Type> {
     ///
     /// # Safety
     /// `start_index` must be a valid edge index for the node.
-    unsafe fn find_key_index<Q: ?Sized, O>(
+    unsafe fn find_key_index<Q: ?Sized, C>(
         &self,
         key: &Q,
-        order: &O,
+        context: &C,
         start_index: usize,
     ) -> IndexResult
     where
-        K: SortableByWithOrder<O>,
-        Q: SortableByWithOrder<O>,
-        O: TotalOrder,
+        K: ContextualOrd<C> + ContextualBorrow<Q, C>,
+        Q: ContextualOrd<C>,
     {
         let node = self.reborrow();
         let keys = node.keys();
         debug_assert!(start_index <= keys.len());
         for (offset, k) in unsafe { keys.get_unchecked(start_index..) }.iter().enumerate() {
-            match order.cmp_any(key, k) {
+            match key.contextual_cmp(k.contextual_borrow(context), context) {
                 Ordering::Greater => {}
                 Ordering::Equal => return IndexResult::KV(start_index + offset),
                 Ordering::Less => return IndexResult::Edge(start_index + offset),
@@ -267,22 +261,21 @@ impl<BorrowType, K, V, Type> NodeRef<BorrowType, K, V, Type> {
     /// the matching child node, if `self` is an internal node.
     ///
     /// The result is meaningful only if the tree is ordered by key.
-    fn find_lower_bound_index<'r, Q, O>(
+    fn find_lower_bound_index<'r, Q, C>(
         &self,
-        order: &O,
+        context: &C,
         bound: SearchBound<&'r Q>,
     ) -> (usize, SearchBound<&'r Q>)
     where
-        K: SortableByWithOrder<O>,
-        Q: ?Sized + SortableByWithOrder<O>,
-        O: TotalOrder,
+        K: ContextualOrd<C> + ContextualBorrow<Q, C>,
+        Q: ?Sized + ContextualOrd<C>,
     {
         match bound {
-            Included(key) => match unsafe { self.find_key_index(key, order, 0) } {
+            Included(key) => match unsafe { self.find_key_index(key, context, 0) } {
                 IndexResult::KV(idx) => (idx, AllExcluded),
                 IndexResult::Edge(idx) => (idx, bound),
             },
-            Excluded(key) => match unsafe { self.find_key_index(key, order, 0) } {
+            Excluded(key) => match unsafe { self.find_key_index(key, context, 0) } {
                 IndexResult::KV(idx) => (idx + 1, AllIncluded),
                 IndexResult::Edge(idx) => (idx, bound),
             },
@@ -296,23 +289,22 @@ impl<BorrowType, K, V, Type> NodeRef<BorrowType, K, V, Type> {
     ///
     /// # Safety
     /// `start_index` must be a valid edge index for the node.
-    unsafe fn find_upper_bound_index<'r, Q, O>(
+    unsafe fn find_upper_bound_index<'r, Q, C>(
         &self,
-        order: &O,
+        context: &C,
         bound: SearchBound<&'r Q>,
         start_index: usize,
     ) -> (usize, SearchBound<&'r Q>)
     where
-        K: SortableByWithOrder<O>,
-        Q: ?Sized + SortableByWithOrder<O>,
-        O: TotalOrder,
+        K: ContextualOrd<C> + ContextualBorrow<Q, C>,
+        Q: ?Sized + ContextualOrd<C>,
     {
         match bound {
-            Included(key) => match unsafe { self.find_key_index(key, order, start_index) } {
+            Included(key) => match unsafe { self.find_key_index(key, context, start_index) } {
                 IndexResult::KV(idx) => (idx + 1, AllExcluded),
                 IndexResult::Edge(idx) => (idx, bound),
             },
-            Excluded(key) => match unsafe { self.find_key_index(key, order, start_index) } {
+            Excluded(key) => match unsafe { self.find_key_index(key, context, start_index) } {
                 IndexResult::KV(idx) => (idx, AllIncluded),
                 IndexResult::Edge(idx) => (idx, bound),
             },

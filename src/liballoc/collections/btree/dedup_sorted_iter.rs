@@ -1,6 +1,6 @@
 use core::iter::Peekable;
 
-use crate::{SortableByWithOrder, TotalOrder};
+use contextual_cmp::{borrow::ContextualBorrow, cmp::ContextualOrd};
 
 /// A iterator for deduping the key of a sorted iterator.
 /// When encountering the duplicated key, only the last key-value pair is yielded.
@@ -8,27 +8,26 @@ use crate::{SortableByWithOrder, TotalOrder};
 /// Used by [`BTreeMap::bulk_build_from_sorted_iter`][1].
 ///
 /// [1]: crate::collections::BTreeMap::bulk_build_from_sorted_iter
-pub struct DedupSortedIter<'a, K, V, O, I>
+pub struct DedupSortedIter<'a, K, V, C, I>
 where
     I: Iterator<Item = (K, V)>,
 {
     iter: Peekable<I>,
-    order: &'a O,
+    context: &'a C,
 }
 
-impl<'a, K, V, O, I> DedupSortedIter<'a, K, V, O, I>
+impl<'a, K, V, C, I> DedupSortedIter<'a, K, V, C, I>
 where
     I: Iterator<Item = (K, V)>,
 {
-    pub fn new(iter: I, order: &'a O) -> Self {
-        Self { iter: iter.peekable(), order }
+    pub fn new(iter: I, context: &'a C) -> Self {
+        Self { iter: iter.peekable(), context }
     }
 }
 
-impl<K, V, O, I> Iterator for DedupSortedIter<'_, K, V, O, I>
+impl<K, V, C, I> Iterator for DedupSortedIter<'_, K, V, C, I>
 where
-    K: SortableByWithOrder<O>,
-    O: TotalOrder,
+    K: ContextualOrd<C>,
     I: Iterator<Item = (K, V)>,
 {
     type Item = (K, V);
@@ -45,7 +44,7 @@ where
                 None => return Some(next),
             };
 
-            if self.order.ne(&next.0, &peeked.0) {
+            if next.0.contextual_ne(&peeked.0, self.context) {
                 return Some(next);
             }
         }

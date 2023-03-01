@@ -1,4 +1,3 @@
-use crate::default::OrdStoredKey;
 use std::cell::Cell;
 use std::cmp::Ordering::{self, *};
 use std::ptr;
@@ -11,10 +10,6 @@ pub enum Cyclic3 {
     C,
 }
 use Cyclic3::*;
-
-impl OrdStoredKey for Cyclic3 {
-    type OrdKeyType = Self;
-}
 
 impl PartialOrd for Cyclic3 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -56,15 +51,11 @@ impl Governor {
     }
 }
 
-// Type with an `Ord` implementation that forms a total order at any moment
-// (assuming that `T` respects total order), but can suddenly be made to invert
-// that total order.
+// Type with an `Ord` implementation that forms a runtime context at any moment
+// (assuming that `T` respects runtime context), but can suddenly be made to invert
+// that runtime context.
 #[derive(Debug)]
 pub struct Governed<'a, T>(pub T, pub &'a Governor);
-
-impl<T: Ord> OrdStoredKey for Governed<'_, T> {
-    type OrdKeyType = Self;
-}
 
 impl<T: Ord> PartialOrd for Governed<'_, T> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {

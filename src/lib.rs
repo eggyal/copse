@@ -1,5 +1,5 @@
 #![doc = include_str!("../README.md")]
-#![cfg_attr(not(any(feature = "std", test)), no_std)]
+#![cfg_attr(not(test), no_std)]
 #![cfg_attr(feature = "allocator_api", feature(allocator_api))]
 #![cfg_attr(feature = "core_intrinsics", feature(core_intrinsics))]
 #![cfg_attr(feature = "dropck_eyepatch", feature(dropck_eyepatch))]
@@ -26,12 +26,10 @@
 
 #[macro_use]
 extern crate alloc;
-
-use core::cmp::Ordering;
+pub extern crate contextual_cmp;
 
 #[macro_use]
 mod polyfill;
-pub mod default;
 
 // port of stdlib implementation
 mod liballoc;
@@ -48,173 +46,3 @@ pub use btree_map::BTreeMap;
 #[cfg(not(no_global_oom_handling))]
 #[doc(no_inline)]
 pub use btree_set::BTreeSet;
-
-/// A strict [total order] over the associated type [`OrderedType`].
-///
-/// This means that for all `a`, `b` and `c`:
-///
-/// 1. exactly one of `a < b`, `a == b` or `a > b` is true;
-/// 2. `<` is the dual of `>`: that is, `a < b` if and only if `b > a`; and
-/// 3. `<` is transitive: `a < b` and `b < c` implies `a < c`.
-///    The same must hold for both `==` and `>`.
-///
-/// [total order]: https://en.wikipedia.org/wiki/Total_order
-/// [`OrderedType`]: TotalOrder::OrderedType
-pub trait TotalOrder {
-    /// The type over which this total order is defined.
-    type OrderedType: ?Sized;
-
-    /// This method returns the [`Ordering`] between `this` and `that` under
-    /// this total order.
-    ///
-    /// By convention, `self.cmp(&this, &that)` returns the ordering matching
-    /// the expression `this <operator> that` if true.
-    fn cmp(&self, this: &Self::OrderedType, that: &Self::OrderedType) -> Ordering;
-
-    /// This method returns the [`Ordering`] between `this` and `that` under
-    /// this total order.
-    ///
-    /// By convention, `self.cmp(&this, &that)` returns the ordering matching
-    /// the expression `this <operator> that` if true.
-    #[doc(hidden)]
-    #[inline]
-    fn cmp_any<A, B>(&self, this: &A, that: &B) -> Ordering
-    where
-        A: ?Sized + SortableByWithOrder<Self>,
-        B: ?Sized + SortableByWithOrder<Self>,
-    {
-        self.cmp(this.sort_key_with_order(self), that.sort_key_with_order(self))
-    }
-
-    /// Tests whether `this == that` under this total order.  It is a logic
-    /// error for this method to be inconsistent with [`TotalOrder::cmp`],
-    /// and therefore the default implementation should rarely be overriden.
-    #[doc(hidden)]
-    #[inline]
-    fn eq<A, B>(&self, this: &A, that: &B) -> bool
-    where
-        A: ?Sized + SortableByWithOrder<Self>,
-        B: ?Sized + SortableByWithOrder<Self>,
-    {
-        self.cmp_any(this, that).is_eq()
-    }
-    /// Tests whether `this != that` under this total order.  It is a logic
-    /// error for this method to be inconsistent with [`TotalOrder::cmp`],
-    /// and therefore the default implementation should rarely be overriden.
-    #[doc(hidden)]
-    #[inline]
-    fn ne<A, B>(&self, this: &A, that: &B) -> bool
-    where
-        A: ?Sized + SortableByWithOrder<Self>,
-        B: ?Sized + SortableByWithOrder<Self>,
-    {
-        self.cmp_any(this, that).is_ne()
-    }
-
-    /// Tests whether `this >= that` under this total order.  It is a logic
-    /// error for this method to be inconsistent with [`TotalOrder::cmp`],
-    /// and therefore the default implementation should rarely be overriden.
-    #[doc(hidden)]
-    #[inline]
-    fn ge<A, B>(&self, this: &A, that: &B) -> bool
-    where
-        A: ?Sized + SortableByWithOrder<Self>,
-        B: ?Sized + SortableByWithOrder<Self>,
-    {
-        self.cmp_any(this, that).is_ge()
-    }
-    /// Tests whether `this > that` under this total order.  It is a logic
-    /// error for this method to be inconsistent with [`TotalOrder::cmp`],
-    /// and therefore the default implementation should rarely be overriden.
-    #[doc(hidden)]
-    #[inline]
-    fn gt<A, B>(&self, this: &A, that: &B) -> bool
-    where
-        A: ?Sized + SortableByWithOrder<Self>,
-        B: ?Sized + SortableByWithOrder<Self>,
-    {
-        self.cmp_any(this, that).is_gt()
-    }
-    /// Tests whether `this <= that` under this total order.  It is a logic
-    /// error for this method to be inconsistent with [`TotalOrder::cmp`],
-    /// and therefore the default implementation should rarely be overriden.
-    #[doc(hidden)]
-    #[inline]
-    fn le<A, B>(&self, this: &A, that: &B) -> bool
-    where
-        A: ?Sized + SortableByWithOrder<Self>,
-        B: ?Sized + SortableByWithOrder<Self>,
-    {
-        self.cmp_any(this, that).is_le()
-    }
-    /// Tests whether `this < that` under this total order.  It is a logic
-    /// error for this method to be inconsistent with [`TotalOrder::cmp`],
-    /// and therefore the default implementation should rarely be overriden.
-    #[doc(hidden)]
-    #[inline]
-    fn lt<A, B>(&self, this: &A, that: &B) -> bool
-    where
-        A: ?Sized + SortableByWithOrder<Self>,
-        B: ?Sized + SortableByWithOrder<Self>,
-    {
-        self.cmp_any(this, that).is_lt()
-    }
-}
-
-/// A type that is sortable by its [`sort_key`] under total orders of type parameter `O`.
-///
-/// **Note that if you wish to use `O::OrderedType` itself with copse's collections, you
-/// must explicitly implement `SortableBy<O>` for it even though that implementation will
-/// typically be a no-op.**  This case cannot currently be provided for you by way of a
-/// blanket implementation because that would conflict with the [blanket borrowing
-/// implementation] that is provided for the default [`OrdTotalOrder`]; implementations
-/// for `O::OrderedType` that are not no-ops are strongly discouraged, as they are prone
-/// to causing considerable confusion—for any such use-case, consider defining a distinct
-/// [`TotalOrder`] instead.
-///
-/// # Example
-/// ```rust
-/// use copse::{BTreeSet, SortableBy, TotalOrder};
-/// use std::cmp::Ordering;
-///
-/// struct MyOrdering;
-///
-/// impl TotalOrder for MyOrdering {
-///     type OrderedType = str;
-///     fn cmp(&self, this: &str, that: &str) -> Ordering { this.cmp(that) }
-/// }
-///
-/// impl SortableBy<MyOrdering> for String {
-///     fn sort_key(&self) -> &str { self.as_str() }
-/// }
-/// impl SortableBy<MyOrdering> for str {
-///     fn sort_key(&self) -> &str { self }
-/// }
-///
-/// let mut set = BTreeSet::new(MyOrdering);
-/// set.insert(String::from("a"));
-/// assert!(set.contains("a"));
-/// ```
-///
-/// [`sort_key`]: SortableBy::sort_key
-/// [blanket borrowing implementation]: #impl-SortableBy%3COrdTotalOrder%3CT%3E%3E-for-K
-/// [`OrdTotalOrder`]: default::OrdTotalOrder
-pub trait SortableBy<O: ?Sized + TotalOrder> {
-    /// Extract the sort key by which `self` is ordered under total orders of type `O`.
-    fn sort_key(&self) -> &O::OrderedType;
-}
-
-#[doc(hidden)]
-pub trait SortableByWithOrder<O: ?Sized + TotalOrder> {
-    fn sort_key_with_order<'a>(&'a self, order: &'a O) -> &'a O::OrderedType;
-}
-
-impl<S, O> SortableByWithOrder<O> for S
-where
-    S: ?Sized + SortableBy<O>,
-    O: ?Sized + TotalOrder,
-{
-    fn sort_key_with_order(&self, _: &O) -> &<O as TotalOrder>::OrderedType {
-        self.sort_key()
-    }
-}

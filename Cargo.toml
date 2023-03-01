@@ -1,9 +1,11 @@
+[workspace]
+
 [package]
 name = "copse"
 version = "0.4.1"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/eggyal/copse.git"
-description = "Direct ports of the standard library's BTreeMap, BTreeSet and BinaryHeap collections, but that sort according to a specified total order rather than the `Ord` trait"
+description = "Direct ports of the standard library's BTreeMap, BTreeSet and BinaryHeap collections, but that sort according to some runtime context rather than the Ord trait"
 edition = "2021"
 keywords = ["b-tree", "collections", "binary-heap", "runtime"]
 categories = ["data-structures", "no-std"]
@@ -68,11 +70,10 @@ unstable = [
     "map_try_insert",
 ]
 
-std = []
-
 [dependencies]
 cfg-if = "1.0.0"
 rustversion = "1.0.11"
+contextual_cmp = { path = "contextual_cmp" }
 
 [dev-dependencies]
 rand = { version = "0.8.5", default-features = false, features = ["alloc"] }
