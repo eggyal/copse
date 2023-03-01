@@ -1,0 +1,17 @@
+[package]
+name = "contextual_core"
+version = "0.1.0"
+description = "Direct ports of the core library's comparison and borrowing traits, but whose methods additionally accept a context value of custom type"
+keywords = ["borrow", "comparison", "iterator", "context", "runtime"]
+categories = ["data-structures", "no-std", "no-std::no-alloc"]
+license.workspace = true
+repository.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[features]
+is_sorted = []
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

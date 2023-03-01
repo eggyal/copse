@@ -1,0 +1,52 @@
+[package]
+name = "contextual_std"
+version = "0.1.0"
+description = "TODO"
+keywords = ["collections", "runtime"]
+categories = ["data-structures"]
+license.workspace = true
+repository.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[features]
+allow_internal_unstable = []
+extend_one = ["contextual_alloc/extend_one"]
+rustc_attrs = ["contextual_alloc/rustc_attrs"]
+nightly = [
+    "contextual_hashbrown/nightly",
+    "allow_internal_unstable",
+    "extend_one",
+    "rustc_attrs",
+]
+
+const_collections_with_hasher = []
+entry_insert = []
+hash_drain_filter = []
+hash_raw_entry = []
+hash_set_entry = []
+map_entry_replace = []
+map_many_mut = []
+map_try_insert = ["contextual_alloc/map_try_insert"]
+unstable = [
+    "const_collections_with_hasher",
+    "entry_insert",
+    "hash_drain_filter",
+    "hash_set_entry",
+    "map_entry_replace",
+    "map_many_mut",
+    "map_try_insert",
+]
+
+[dependencies]
+contextual_alloc = { workspace = true, features = ["container_error_extra"] }
+contextual_core.workspace = true
+contextual_hashbrown.workspace = true
+
+[dev-dependencies]
+rand = { version = "0.8.5", default-features = false, features = ["alloc"] }
+rand_xorshift = "0.3.0"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

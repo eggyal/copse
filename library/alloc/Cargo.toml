@@ -1,0 +1,85 @@
+[package]
+name = "contextual_alloc"
+version = "0.1.0"
+description = "Direct ports of the standard library's BTreeMap, BTreeSet and BinaryHeap collections, but that sort according to some runtime context rather than the Ord trait"
+keywords = ["b-tree", "collections", "binary-heap", "runtime"]
+categories = ["data-structures", "no-std"]
+license.workspace = true
+repository.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[features]
+allocator_api = []
+btreemap_alloc = ["allocator_api"]
+core_intrinsics = []
+dropck_eyepatch = []
+error_in_core = []
+exact_size_is_empty = []
+exclusive_range_pattern = []
+extend_one = []
+hasher_prefixfree_extras = []
+inline_const = []
+inplace_iteration = []
+is_sorted = []
+maybe_uninit_slice = []
+new_uninit = []
+rustc_attrs = []
+slice_ptr_get = []
+specialization = []
+trusted_len = []
+nightly = [
+    "allocator_api",
+    "btreemap_alloc",
+    "core_intrinsics",
+    "dropck_eyepatch",
+    "error_in_core",
+    "exact_size_is_empty",
+    "exclusive_range_pattern",
+    "extend_one",
+    "hasher_prefixfree_extras",
+    "inline_const",
+    "inplace_iteration",
+    "is_sorted",
+    "maybe_uninit_slice",
+    "new_uninit",
+    "rustc_attrs",
+    "slice_ptr_get",
+    "specialization",
+    "trusted_len",
+]
+
+binary_heap_as_slice = []
+binary_heap_drain_sorted = []
+binary_heap_into_iter_sorted = []
+binary_heap_retain = []
+btree_cursors = []
+btree_drain_filter = []
+const_btree_len = []
+const_btree_new = ["const_btree_len"]
+container_error_extra = []
+map_try_insert = []
+unstable = [
+    "binary_heap_as_slice",
+    "binary_heap_drain_sorted",
+    "binary_heap_into_iter_sorted",
+    "binary_heap_retain",
+    "btree_cursors",
+    "btree_drain_filter",
+    "const_btree_new",
+    "container_error_extra",
+    "map_try_insert",
+]
+
+[dependencies]
+cfg-if = "1.0.0"
+rustversion = "1.0.11"
+contextual_core.workspace = true
+
+[dev-dependencies]
+rand = { version = "0.8.5", default-features = false, features = ["alloc"] }
+rand_xorshift = "0.3.0"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
