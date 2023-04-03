@@ -39,7 +39,7 @@ mod definitions {
                 }
             }
 
-            #[derive(Copy, Clone, Debug)]
+            #[derive(Copy, Clone, Debug, Default)]
             pub struct Global;
 
             impl Allocator for Global {}

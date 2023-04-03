@@ -845,7 +845,6 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
     ///
     /// assert_eq!(heap.into_sorted_vec(), [-10, 2, 4])
     /// ```
-    #[cfg(feature = "binary_heap_retain")]
     pub fn retain<F>(&mut self, mut f: F)
     where
         F: FnMut(&T) -> bool,
@@ -1478,6 +1477,20 @@ cfg_if! {
         }
 
         impl<T> FusedIterator for IntoIter<T> {}
+
+        #[rustversion::since(1.69)]
+        impl<T> Default for IntoIter<T> {
+            /// Creates an empty `binary_heap::IntoIter`.
+            ///
+            /// ```
+            /// # use copse::binary_heap;
+            /// let iter: binary_heap::IntoIter<u8> = Default::default();
+            /// assert_eq!(iter.len(), 0);
+            /// ```
+            fn default() -> Self {
+                IntoIter { iter: Default::default() }
+            }
+        }
 
         // In addition to the SAFETY invariants of the following three unsafe traits
         // also refer to the vec::in_place_collect module documentation to get an overview
