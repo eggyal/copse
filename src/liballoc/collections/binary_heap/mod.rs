@@ -153,7 +153,6 @@ use alloc::slice;
 use alloc::vec::{self, Vec};
 use cfg_if::cfg_if;
 
-use super::SpecExtend;
 use crate::{
     default::{OrdStoredKey, OrdTotalOrder},
     SortableBy, SortableByWithOrder, TotalOrder,
@@ -405,6 +404,17 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder + Default> Default for BinaryHeap<
 impl<T: fmt::Debug, O> fmt::Debug for BinaryHeap<T, O> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.iter()).finish()
+    }
+}
+
+struct RebuildOnDrop<'a, T: SortableByWithOrder<O>, O: TotalOrder> {
+    heap: &'a mut BinaryHeap<T, O>,
+    rebuild_from: usize,
+}
+
+impl<'a, T: SortableByWithOrder<O>, O: TotalOrder> Drop for RebuildOnDrop<'a, T, O> {
+    fn drop(&mut self) {
+        self.heap.rebuild_tail(self.rebuild_from);
     }
 }
 
@@ -849,30 +859,19 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
     where
         F: FnMut(&T) -> bool,
     {
-        struct RebuildOnDrop<'a, T: SortableByWithOrder<O>, O: TotalOrder> {
-            heap: &'a mut BinaryHeap<T, O>,
-            first_removed: usize,
-        }
-
-        let mut guard = RebuildOnDrop { first_removed: self.len(), heap: self };
-
+        // rebuild_start will be updated to the first touched element below, and the rebuild will
+        // only be done for the tail.
+        let mut guard = RebuildOnDrop { rebuild_from: self.len(), heap: self };
         let mut i = 0;
+
         guard.heap.data.retain(|e| {
             let keep = f(e);
-            if !keep && i < guard.first_removed {
-                guard.first_removed = i;
+            if !keep && i < guard.rebuild_from {
+                guard.rebuild_from = i;
             }
             i += 1;
             keep
         });
-
-        impl<'a, T: SortableByWithOrder<O>, O: TotalOrder> Drop for RebuildOnDrop<'a, T, O> {
-            fn drop(&mut self) {
-                // data[..first_removed] is untouched, so we only need to
-                // rebuild the tail:
-                self.heap.rebuild_tail(self.first_removed);
-            }
-        }
     }
 
     #[doc(hidden)]
@@ -1739,7 +1738,8 @@ impl<'a, T, O> IntoIterator for &'a BinaryHeap<T, O> {
 impl<T: SortableByWithOrder<O>, O: TotalOrder> Extend<T> for BinaryHeap<T, O> {
     #[inline]
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
-        <Self as SpecExtend<I>>::spec_extend(self, iter);
+        let guard = RebuildOnDrop { rebuild_from: self.len(), heap: self };
+        guard.heap.data.extend(iter);
     }
 
     #[inline]
@@ -1752,47 +1752,6 @@ impl<T: SortableByWithOrder<O>, O: TotalOrder> Extend<T> for BinaryHeap<T, O> {
     #[cfg(feature = "extend_one")]
     fn extend_reserve(&mut self, additional: usize) {
         self.reserve(additional);
-    }
-}
-
-cfg_if! {
-    if #[cfg(feature = "specialization")] {
-        impl<T: SortableByWithOrder<O>, O: TotalOrder, I: IntoIterator<Item = T>> SpecExtend<I> for BinaryHeap<T, O> {
-            default fn spec_extend(&mut self, iter: I) {
-                self.extend_desugared(iter.into_iter());
-            }
-        }
-
-        impl<T: SortableByWithOrder<O>, O: TotalOrder> SpecExtend<Vec<T>> for BinaryHeap<T, O> {
-            fn spec_extend(&mut self, ref mut other: Vec<T>) {
-                let start = self.data.len();
-                self.data.append(other);
-                self.rebuild_tail(start);
-            }
-        }
-
-        impl<T: SortableByWithOrder<O>, O: TotalOrder> SpecExtend<BinaryHeap<T, O>> for BinaryHeap<T, O> {
-            fn spec_extend(&mut self, ref mut other: BinaryHeap<T, O>) {
-                self.append(other);
-            }
-        }
-    } else {
-        impl<T: SortableByWithOrder<O>, O: TotalOrder, I: IntoIterator<Item = T>> SpecExtend<I> for BinaryHeap<T, O> {
-            fn spec_extend(&mut self, iter: I) {
-                self.extend_desugared(iter.into_iter());
-            }
-        }
-    }
-}
-
-impl<T: SortableByWithOrder<O>, O: TotalOrder> BinaryHeap<T, O> {
-    fn extend_desugared<I: IntoIterator<Item = T>>(&mut self, iter: I) {
-        let iterator = iter.into_iter();
-        let (lower, _) = iterator.size_hint();
-
-        self.reserve(lower);
-
-        iterator.for_each(move |elem| self.push(elem));
     }
 }
 
